@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: drippedia
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/drippedia
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+
+  jpa:
+    hibernate:
+      ddl-auto: update   # 초기 개발용. 데이터가 쌓이기 시작하면 Flyway/Liquibase로 전환 권장
+    open-in-view: false  # 연관관계를 안 쓰기로 했으니 굳이 OSIV 열어둘 이유가 없음
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: public
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: profile, email
+          # 카카오는 Spring Security 내장 provider가 아니라서 아래 provider 블록까지 직접 채워야 한다
+          kakao:
+            client-id: ${KAKAO_CLIENT_ID}
+            client-secret: ${KAKAO_CLIENT_SECRET}
+            client-name: Kakao
+            authorization-grant-type: authorization_code
+            client-authentication-method: client_secret_post
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: profile_nickname
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
