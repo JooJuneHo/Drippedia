@@ -1,4 +1,12 @@
 spring:
+  # 로컬 개발용. 실제 서버에서는 .env 없이 OS 환경변수를 쓰면 되고,
+  # OS 환경변수가 .env보다 우선순위가 높아서 그대로 덮어쓴다.
+  config:
+    # 실행 위치(저장소 루트 / backend)에 따라 경로가 달라져서 둘 다 본다.
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:backend/.env[.properties]
+
   application:
     name: drippedia
 
@@ -39,6 +47,13 @@ spring:
             token-uri: https://kauth.kakao.com/oauth/token
             user-info-uri: https://kapi.kakao.com/v2/user/me
             user-name-attribute: id
+
+# 프론트가 별도 오리진(app.도메인)에 배포되므로 CORS/리다이렉트 대상을 여기서 잡는다.
+# cookie-domain은 프론트 JS가 XSRF-TOKEN 쿠키를 읽어야 해서 상위 도메인으로 내려주는 값.
+# 로컬은 host가 localhost로 같아서(포트 달라도 쿠키 공유) 비워두면 된다.
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  cookie-domain: ${COOKIE_DOMAIN:}
 
 logging:
   level:
