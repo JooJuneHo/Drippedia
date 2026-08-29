@@ -48,6 +48,11 @@ public class User {
         this.nickname = nickname;
     }
 
+    /** 표시용 값이라 언제든 바뀐다. provider/providerId는 계정 식별자라 손대지 않는다. */
+    public void changeNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
