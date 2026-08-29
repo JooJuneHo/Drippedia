@@ -16,6 +16,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +27,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.regex.MatchResult;
 import java.util.List;
-import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -51,18 +51,23 @@ public class RecipeController {
     /** 홈에 보여줄 인기 레시피 개수. */
     private static final int POPULAR_SIZE = 3;
 
+    /** 목록 한 페이지 크기. 무한 스크롤이 이 단위로 이어 붙인다. */
+    private static final int PAGE_SIZE = 20;
+
     /**
      * 상세 설명에 섞여 있는 #태그. 목록 카드는 이것만 보여준다.
      * 공백/줄바꿈에서 끊고, 앞에 글자가 붙어 있으면(링크 뒤의 #조각 등) 태그로 안 친다.
      */
     private static final java.util.regex.Pattern TAG = java.util.regex.Pattern.compile("(?<!\\S)#[^\\s#]+");
 
-    /** 메인 화면 목록(최신순). dripper를 주면 그 도구만 거른다. 로그인 없이도 볼 수 있다. */
+    /** 메인 화면 목록. dripper를 주면 그 도구만 거른다. 로그인 없이도 볼 수 있다.
+     *  무한 스크롤이라 page를 0부터 하나씩 올려 가며 부른다(한 번에 PAGE_SIZE개). */
     @GetMapping
     public List<Summary> list(@RequestParam(required = false) String dripper,
                               @RequestParam(required = false) String q,
-                              @RequestParam(required = false) String sort) {
-        return sorted(summaries(recipeRepository.search(dripper, null, null, like(q))), sort);
+                              @RequestParam(required = false) String sort,
+                              @RequestParam(defaultValue = "0") int page) {
+        return summaries(recipeRepository.search(dripper, null, null, like(q), sort(sort), pageOf(page)));
     }
 
     /** 내가 등록한 것만. 이 경로만 SecurityConfig에서 authenticated로 잡아 뒀다(아니면 userId가 null). */
@@ -70,8 +75,9 @@ public class RecipeController {
     public List<Summary> mine(@CurrentUserId Long userId,
                               @RequestParam(required = false) String dripper,
                               @RequestParam(required = false) String q,
-                              @RequestParam(required = false) String sort) {
-        return sorted(summaries(recipeRepository.search(dripper, userId, null, like(q))), sort);
+                              @RequestParam(required = false) String sort,
+                              @RequestParam(defaultValue = "0") int page) {
+        return summaries(recipeRepository.search(dripper, userId, null, like(q), sort(sort), pageOf(page)));
     }
 
     /** 내가 저장(북마크)한 것만. /mine과 같은 이유로 authenticated. */
@@ -79,8 +85,9 @@ public class RecipeController {
     public List<Summary> saved(@CurrentUserId Long userId,
                                @RequestParam(required = false) String dripper,
                                @RequestParam(required = false) String q,
-                               @RequestParam(required = false) String sort) {
-        return sorted(summaries(recipeRepository.search(dripper, null, userId, like(q))), sort);
+                               @RequestParam(required = false) String sort,
+                               @RequestParam(defaultValue = "0") int page) {
+        return summaries(recipeRepository.search(dripper, null, userId, like(q), sort(sort), pageOf(page)));
     }
 
     /**
@@ -265,19 +272,14 @@ public class RecipeController {
         return rows.stream().collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
     }
 
-    /**
-     * 정렬. 좋아요/저장 수는 목록을 만들면서 이미 세어 뒀으니 그걸로 다시 세운다.
-     * 같은 수끼리는 정렬이 안정적이라 쿼리가 준 최신순이 그대로 유지된다.
-     * ponytail: 목록을 통째로 읽어 오는 구조라 메모리 정렬. 페이징이 붙으면 그때 쿼리 order by로.
-     */
-    private List<Summary> sorted(List<Summary> summaries, String sort) {
-        Comparator<Summary> by = switch (sort == null ? "" : sort) {
-            case "popular" -> Comparator.comparingLong(Summary::likes).reversed();
-            case "saves" -> Comparator.comparingLong(Summary::saves).reversed();
-            default -> null; // 최신순은 쿼리가 이미 맞춰 준다
-        };
+    /** 아는 정렬만 쿼리로 넘긴다. 이상한 값이 오면 최신순. */
+    private String sort(String sort) {
+        return "popular".equals(sort) || "saves".equals(sort) ? sort : "";
+    }
 
-        return by == null ? summaries : summaries.stream().sorted(by).toList();
+    /** 음수 페이지로 터지지 않게만 막는다. 크기는 서버가 정한다. */
+    private Pageable pageOf(int page) {
+        return PageRequest.of(Math.max(page, 0), PAGE_SIZE);
     }
 
     /** 빈 검색어는 조건 자체를 끄고, 아니면 대소문자 구분 없는 부분 일치로 만든다. */

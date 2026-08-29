@@ -4,6 +4,8 @@ import com.drippedia.domain.recipe.Recipe;
 import com.drippedia.domain.recipe.RecipeRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,9 +31,21 @@ class RecipeRepositoryTest {
         Recipe old = save(1L, "먼저 등록", "V60");
         Recipe recent = save(2L, "나중 등록", "CHEMEX");
 
-        assertThat(recipeRepository.search(null, null, null, null))
+        assertThat(recipeRepository.search(null, null, null, null, "", Pageable.unpaged()))
                 .extracting(Recipe::getId)
                 .containsSubsequence(recent.getId(), old.getId());
+    }
+
+    @Test
+    void 페이지_단위로_잘라서_준다() {
+        Long author = 4242L; // 공용 개발 DB라 이 테스트만의 작성자로 격리한다
+        Recipe first = save(author, "먼저 등록", "V60");
+        Recipe second = save(author, "나중 등록", "V60");
+
+        assertThat(recipeRepository.search(null, author, null, null, "", PageRequest.of(0, 1)))
+                .extracting(Recipe::getId).containsExactly(second.getId());
+        assertThat(recipeRepository.search(null, author, null, null, "", PageRequest.of(1, 1)))
+                .extracting(Recipe::getId).containsExactly(first.getId());
     }
 
     @Test
@@ -39,7 +53,7 @@ class RecipeRepositoryTest {
         save(1L, "V60 레시피", "V60");
         save(1L, "케멕스 레시피", "CHEMEX");
 
-        assertThat(recipeRepository.search("CHEMEX", null, null, null))
+        assertThat(recipeRepository.search("CHEMEX", null, null, null, "", Pageable.unpaged()))
                 .extracting(Recipe::getDripper)
                 .containsOnly("CHEMEX");
     }
@@ -49,7 +63,7 @@ class RecipeRepositoryTest {
         Recipe mine = save(42L, "내 레시피", "V60");
         save(43L, "남의 레시피", "V60");
 
-        assertThat(recipeRepository.search(null, 42L, null, null))
+        assertThat(recipeRepository.search(null, 42L, null, null, "", Pageable.unpaged()))
                 .extracting(Recipe::getId)
                 .containsExactly(mine.getId());
     }
@@ -60,7 +74,7 @@ class RecipeRepositoryTest {
         save(42L, "내 V60", "V60");
         save(43L, "남의 케멕스", "CHEMEX");
 
-        assertThat(recipeRepository.search("CHEMEX", 42L, null, null))
+        assertThat(recipeRepository.search("CHEMEX", 42L, null, null, "", Pageable.unpaged()))
                 .extracting(Recipe::getId)
                 .containsExactly(target.getId());
     }
@@ -72,10 +86,10 @@ class RecipeRepositoryTest {
                 .description("고소하고 달다 #플로럴 #데일리").build());
         save(1L, "저녁 커피", "V60");
 
-        assertThat(recipeRepository.search(null, null, null, "%#플로럴%"))
+        assertThat(recipeRepository.search(null, null, null, "%#플로럴%", "", Pageable.unpaged()))
                 .extracting(Recipe::getId)
                 .containsExactly(tagged.getId());
-        assertThat(recipeRepository.search(null, null, null, "%아침%"))
+        assertThat(recipeRepository.search(null, null, null, "%아침%", "", Pageable.unpaged()))
                 .extracting(Recipe::getId)
                 .containsExactly(tagged.getId());
     }

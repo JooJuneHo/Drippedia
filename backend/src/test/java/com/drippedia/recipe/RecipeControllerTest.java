@@ -12,6 +12,7 @@ import com.drippedia.domain.user.UserRepository;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -66,7 +67,7 @@ class RecipeControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body(steps)))
                 .andExpect(status().isCreated());
 
-        Recipe saved = recipeRepository.search(null, USER_ID, null, null).getFirst();
+        Recipe saved = recipeRepository.search(null, USER_ID, null, null, "", Pageable.unpaged()).getFirst();
         assertThat(saved.getTitle()).isEqualTo("에티오피아 아침");
         assertThat(pourStepRepository.findByRecipeIdOrderByStepOrderAsc(saved.getId()))
                 .extracting(PourStep::getStepOrder, PourStep::getPourAmount)
@@ -96,7 +97,7 @@ class RecipeControllerTest {
         mockMvc.perform(post("/api/recipes").with(loggedIn()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content(body(steps)))
                 .andExpect(status().isCreated());
-        Long id = recipeRepository.search(null, USER_ID, null, null).getFirst().getId();
+        Long id = recipeRepository.search(null, USER_ID, null, null, "", Pageable.unpaged()).getFirst().getId();
 
         mockMvc.perform(get("/api/recipes/" + id))
                 .andExpect(status().isOk())
@@ -119,7 +120,7 @@ class RecipeControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body("[]")))
                 .andExpect(status().isBadRequest());
 
-        assertThat(recipeRepository.search(null, USER_ID, null, null)).isEmpty();
+        assertThat(recipeRepository.search(null, USER_ID, null, null, "", Pageable.unpaged())).isEmpty();
     }
 
     @Test
@@ -205,7 +206,7 @@ class RecipeControllerTest {
         mockMvc.perform(post("/api/recipes").with(loggedIn()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content(body(ONE_STEP)))
                 .andExpect(status().isCreated());
-        Long id = recipeRepository.search(null, USER_ID, null, null).getFirst().getId();
+        Long id = recipeRepository.search(null, USER_ID, null, null, "", Pageable.unpaged()).getFirst().getId();
 
         String steps = """
                 [{"startTimeSeconds":0,"pourAmount":40},{"startTimeSeconds":30,"pourAmount":200}]""";

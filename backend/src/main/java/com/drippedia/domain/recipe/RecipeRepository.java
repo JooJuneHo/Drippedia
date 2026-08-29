@@ -1,5 +1,6 @@
 package com.drippedia.domain.recipe;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,6 +13,9 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
      * 목록 화면 세 개(전체 / 내가 쓴 것 / 내가 저장한 것)가 다 이걸 쓴다.
      * q는 컨트롤러에서 소문자 %검색어% 형태로 만들어 넘긴다(태그는 상세 설명에 그대로 들어 있어 같이 걸린다).
      * null을 넘기면 그 조건은 무시(전체 목록 = 넷 다 null).
+     *
+     * 정렬은 sort('popular' | 'saves' | 그 외=최신순)로 갈린다. 무한 스크롤이 페이지를 잘라 가니
+     * 좋아요/저장 수 정렬도 쿼리에서 끝내야 한다 - 페이지 안에서만 다시 세우면 순서가 뒤죽박죽이 된다.
      */
     @Query("""
             select r from Recipe r
@@ -22,10 +26,18 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
                    or lower(r.title) like :q
                    or lower(r.beanName) like :q
                    or lower(r.description) like :q)
-            order by r.createdAt desc, r.id desc
+            order by
+              case
+                when :sort = 'popular' then (select count(l) from RecipeLike l where l.recipeId = r.id)
+                when :sort = 'saves' then (select count(s2) from RecipeSave s2 where s2.recipeId = r.id)
+                else 0
+              end desc,
+              r.createdAt desc, r.id desc
             """)
     List<Recipe> search(@Param("dripper") String dripper,
                         @Param("authorId") Long authorId,
                         @Param("savedBy") Long savedBy,
-                        @Param("q") String q);
+                        @Param("q") String q,
+                        @Param("sort") String sort,
+                        Pageable pageable);
 }
