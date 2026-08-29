@@ -59,6 +59,8 @@ spring:
 # 쿠키에 SameSite=None; Secure가 없으면 브라우저가 세션 쿠키를 통째로 버린다 = 로그인이 안 붙는다.
 # 로컬은 http라 Secure 쿠키를 못 써서 기본값은 lax/false.
 server:
+  # Render 같은 호스트는 PORT로 포트를 지정해 준다. 로컬은 그대로 8080.
+  port: ${PORT:8080}
   servlet:
     session:
       cookie:
