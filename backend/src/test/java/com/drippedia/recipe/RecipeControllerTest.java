@@ -194,4 +194,20 @@ class RecipeControllerTest {
                 .extracting(PourStep::getStepOrder, PourStep::getPourAmount)
                 .containsExactly(Tuple.tuple(1, 40), Tuple.tuple(2, 200));
     }
+    @Test
+    void 좋아요는_켰다_껐다_되고_개수가_상세에_같이_나온다() throws Exception {
+        Recipe other = othersRecipe();
+
+        mockMvc.perform(post("/api/recipes/" + other.getId() + "/like").with(loggedIn()).with(csrf()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/recipes/" + other.getId()).with(loggedIn()))
+                .andExpect(jsonPath("$.liked").value(true))
+                .andExpect(jsonPath("$.likes").value(1));
+
+        mockMvc.perform(delete("/api/recipes/" + other.getId() + "/like").with(loggedIn()).with(csrf()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/recipes/" + other.getId()).with(loggedIn()))
+                .andExpect(jsonPath("$.liked").value(false))
+                .andExpect(jsonPath("$.likes").value(0));
+    }
 }

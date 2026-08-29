@@ -122,7 +122,7 @@ function render(recipes) {
       ${r.tags?.length ? `<p class="tags">${r.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</p>` : ''}
         <div class="bottom">
           <span class="spec">1:${r.ratio.toFixed(1)} · ${r.coffeeAmount}g / ${r.waterAmount}g · ${r.waterTemp}℃</span>
-          <span class="by">${esc(r.author)}</span>
+          <span class="by">♥${r.likes ?? 0} ★${r.saves ?? 0} · ${esc(r.author)}</span>
         </div>
       </a>
     </li>`).join('');
@@ -176,22 +176,27 @@ function renderDetail(r) {
       </ol>
 
       <div class="actions">
-        <button type="button" id="save-toggle" class="${r.saved ? 'on' : ''}">${r.saved ? '★ 저장됨' : '☆ 저장하기'}</button>
+        <button type="button" id="like-toggle" class="${r.liked ? 'on' : ''}">${r.liked ? '♥' : '♡'} 좋아요 ${r.likes ?? 0}</button>
+        <button type="button" id="save-toggle" class="${r.saved ? 'on' : ''}">${r.saved ? '★' : '☆'} 저장 ${r.saves ?? 0}</button>
         ${r.mine ? `<a href="#edit/${r.id}">수정</a>
         <button type="button" id="delete-recipe" class="danger">삭제</button>` : ''}
       </div>
     </div>`;
 
-  $('save-toggle').addEventListener('click', () => toggleSave(r));
+  $('like-toggle').addEventListener('click', () => toggle(r.id, 'like', r.liked));
+  $('save-toggle').addEventListener('click', () => toggle(r.id, 'save', r.saved));
   if (r.mine) {
     $('delete-recipe').addEventListener('click', () => removeRecipe(r.id));
   }
 }
 
-/** 저장/저장 취소. 버튼 상태만 바뀌니 응답을 기다렸다가 그대로 다시 그린다. */
-async function toggleSave(r) {
-  const res = await fetch(`${API}/api/recipes/${r.id}/save`, {
-    method: r.saved ? 'DELETE' : 'POST',
+/**
+ * 좋아요/저장 켜고 끄기. kind가 그대로 URL 조각이다(like / save).
+ * 개수는 서버가 세니 응답 뒤에 상세를 다시 받아온다 - 화면에서 숫자를 따로 굴리지 않는다.
+ */
+async function toggle(id, kind, on) {
+  const res = await fetch(`${API}/api/recipes/${id}/${kind}`, {
+    method: on ? 'DELETE' : 'POST',
     credentials: 'include',
     headers: csrfHeader()
   });
@@ -200,11 +205,9 @@ async function toggleSave(r) {
     location.replace('login.html');
     return;
   }
-  if (!res.ok) {
-    return;
+  if (res.ok) {
+    loadDetail(id);
   }
-
-  renderDetail({ ...r, saved: !r.saved });
 }
 
 async function removeRecipe(id) {
