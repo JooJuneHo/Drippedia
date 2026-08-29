@@ -7,72 +7,199 @@
   <style>
     * { box-sizing: border-box; }
     body {
-      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      margin: 0; min-height: 100vh;
       background: #f6f3ef; color: #2b2320;
       font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
     }
-    main { width: 100%; max-width: 340px; padding: 24px; text-align: center; }
-    h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: -0.5px; }
-    p.sub { margin: 0 0 40px; color: #7a6a60; font-size: 14px; }
-    .btn {
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-      width: 100%; padding: 14px; margin-bottom: 10px;
-      border: 1px solid transparent; border-radius: 8px;
-      font-size: 15px; font-weight: 600; text-decoration: none; cursor: pointer;
+    /* 로그인 확인 전에는 감춰 둔다. 미로그인이면 어차피 로그인 화면으로 넘어간다. */
+    #app { max-width: 720px; margin: 0 auto; padding: 20px 16px 88px; visibility: hidden; }
+
+    h1 { font-size: 22px; margin: 0 0 20px; letter-spacing: -0.5px; }
+
+    ul#recipes { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    li.card { background: #fff; border: 1px solid #ece5dd; border-radius: 12px; }
+    li.card > a { display: block; padding: 16px; color: inherit; text-decoration: none; }
+    .card .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .card h2 { font-size: 16px; margin: 0; }
+    .card .method { font-size: 12px; color: #a3552a; font-weight: 600; white-space: nowrap; }
+    .card .bean { margin: 6px 0 0; font-size: 13px; color: #7a6a60; }
+    .card .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; font-size: 12px; }
+    .card .bottom { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 10px; }
+    .card .spec { font-size: 13px; color: #4a3e37; }
+    .card .by { font-size: 12px; color: #a2938a; white-space: nowrap; }
+    .empty { color: #7a6a60; font-size: 14px; text-align: center; padding: 40px 0; }
+
+    #filter { display: flex; gap: 8px; margin-bottom: 16px; }
+    #filter input { flex: 1; min-width: 0; padding: 8px 14px; border-radius: 999px; font-size: 13px; }
+
+    /* 상세 */
+    .back { display: inline-block; margin-bottom: 12px; color: #7a6a60; font-size: 13px; text-decoration: none; }
+    .detail { background: #fff; border: 1px solid #ece5dd; border-radius: 12px; padding: 20px; }
+    .detail .method { margin: 0 0 4px; color: #a3552a; font-size: 13px; font-weight: 600; }
+    .detail .by { margin: 0 0 16px; color: #a2938a; font-size: 12px; }
+    .detail dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
+    .detail dt { color: #7a6a60; font-size: 13px; }
+    .detail dd { margin: 0; }
+    .detail h2 { margin: 24px 0 12px; font-size: 15px; }
+    .detail ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+    .detail ol li { display: flex; align-items: baseline; gap: 10px; font-size: 14px; }
+    .detail .at { min-width: 46px; font-variant-numeric: tabular-nums; color: #a3552a; font-weight: 600; }
+    .detail .pour { min-width: 52px; }
+    .detail .note { color: #7a6a60; font-size: 13px; }
+
+    /* 등록 폼 */
+    form { display: grid; gap: 12px; }
+    label { display: grid; gap: 4px; font-size: 12px; color: #7a6a60; }
+    .row { display: flex; gap: 8px; }
+    .row label { flex: 1; }
+    input, select, textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid #ded5cc; border-radius: 8px;
+      background: #fff; color: #2b2320; font-size: 14px; font-family: inherit;
     }
-    .btn-google { background: #fff; color: #3c4043; border-color: #dadce0; }
-    .btn-kakao { background: #fee500; color: #191600; }
-    .btn-logout { background: none; color: #7a6a60; font-weight: 400; font-size: 13px; }
+    textarea { min-height: 88px; resize: vertical; line-height: 1.5; }
+    .tag { color: #a3552a; font-weight: 600; }
+    .detail .desc { margin: 16px 0 0; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+
+    #filter select { width: auto; padding: 8px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; }
+    form h2 { font-size: 14px; margin: 12px 0 0; }
+    .step { display: flex; gap: 6px; align-items: end; }
+    .step .note { flex: 2; }
+    .step .remove { width: auto; padding: 10px; border: none; background: none; color: #a2938a; font-size: 16px; cursor: pointer; }
+    .btn-add {
+      padding: 10px; border: 1px dashed #ded5cc; border-radius: 8px;
+      background: none; color: #7a6a60; font-size: 13px; font-family: inherit; cursor: pointer;
+    }
+    .btn-primary {
+      margin-top: 8px; padding: 14px; border: none; border-radius: 8px;
+      background: #2b2320; color: #f6f3ef; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
+    }
+    .error { margin: 0; color: #b3261e; font-size: 13px; }
+
+    /* 상세 화면 아래 버튼들 */
+    .actions { display: flex; gap: 8px; margin-top: 20px; }
+    .actions button, .actions a {
+      padding: 10px 14px; border: 1px solid #ded5cc; border-radius: 8px; background: #fff;
+      color: #4a3e37; font-size: 13px; font-family: inherit; text-decoration: none; cursor: pointer;
+    }
+    .actions .on { background: #2b2320; border-color: #2b2320; color: #f6f3ef; }
+    .actions .danger { color: #b3261e; }
+
+    /* 마이: 왼쪽 메뉴 + 오른쪽 내용. side는 <nav>를 쓰면 하단 탭바 스타일(position: fixed)에 걸린다 */
+    .mypage { display: flex; gap: 10px; align-items: start; }
+    .side { width: 116px; flex: none; }
+    .pane { flex: 1; min-width: 0; }
+    .side a { display: block; margin-bottom: 4px; padding: 10px; border-radius: 8px; color: #7a6a60; font-size: 13px; text-decoration: none; }
+    .side a.on { background: #fff; border: 1px solid #ece5dd; color: #2b2320; font-weight: 600; }
+
+    .profile { background: #fff; border: 1px solid #ece5dd; border-radius: 12px; padding: 20px; }
+    .profile p { margin: 0 0 16px; font-size: 15px; }
+    .profile .btn-logout { margin-top: 16px; margin-right: 8px; }
+    .profile #withdraw { color: #b3261e; }
+    .profile .provider { color: #7a6a60; font-size: 13px; }
+    .btn-logout {
+      padding: 10px 16px; border: 1px solid #ded5cc; border-radius: 8px;
+      background: none; color: #7a6a60; font-size: 13px; font-family: inherit; cursor: pointer;
+    }
+
+    /* 하단 탭바. 화면 전환은 여기 링크(#해시)로만 일어난다. */
+    nav {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      display: flex; background: #fff; border-top: 1px solid #ece5dd;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    nav a {
+      flex: 1; padding: 10px 0 12px; text-align: center; text-decoration: none;
+      color: #a2938a; font-size: 11px; line-height: 1.6;
+    }
+    nav a .icon { display: block; font-size: 18px; }
+    nav a.on { color: #2b2320; font-weight: 600; }
+
     .hidden { display: none; }
   </style>
 </head>
 <body>
-<main>
-  <h1>Drippedia</h1>
-  <p class="sub">핸드드립 레시피를 기록하고, 그대로 따라 내려보세요.</p>
 
-  <div id="login" class="hidden">
-    <a class="btn btn-google" data-login="google">Google로 시작하기</a>
-    <a class="btn btn-kakao" data-login="kakao">카카오로 시작하기</a>
+<div id="app">
+  <h1 id="title"></h1>
+
+  <div class="mypage">
+    <!-- 마이 계열(계정 관리 / 내 레시피 관리)에서만 보이는 왼쪽 메뉴. 화면 전환은 해시 링크로 한다 -->
+    <div class="side hidden" id="side">
+      <a href="#me">계정 관리</a>
+      <a href="#manage">내 레시피 관리</a>
+    </div>
+
+    <div class="pane">
+    <section id="view-list">
+      <div id="filter">
+        <input type="search" id="q" placeholder="제목·원두·#태그 검색">
+        <select id="brewMethod">
+          <option value="">전체 도구</option>
+        </select>
+      </div>
+      <ul id="recipes"></ul>
+      <p class="empty hidden" id="empty">아직 등록된 레시피가 없습니다.</p>
+    </section>
+
+    <!-- 내용은 #recipe/{id} 라우트에서 통째로 그린다 -->
+    <section id="view-detail" class="hidden"></section>
+
+    <section id="view-new" class="hidden">
+      <form id="recipe-form">
+        <label>제목 <input name="title" maxlength="100" placeholder="에티오피아 아침" required></label>
+        <label>원두명 <input name="beanName" maxlength="100" placeholder="예가체프" required></label>
+        <div class="row">
+          <label>로스터 <input name="roaster" maxlength="100"></label>
+          <label>원산지 <input name="origin" maxlength="100"></label>
+        </div>
+        <div class="row">
+          <label>로스팅 정도 <input name="roastLevel" maxlength="50" placeholder="라이트"></label>
+          <label>분쇄도 <input name="grindSize" maxlength="50" placeholder="EK43 8.5"></label>
+        </div>
+        <div class="row">
+          <label>드리퍼 <select name="brewMethod" required></select></label>
+          <label>그라인더 <input name="grinder" list="grinders" maxlength="50" placeholder="코만단테 C40"></label>
+        </div>
+        <datalist id="grinders"></datalist>
+        <div class="row">
+          <label>커피(g) <input type="number" name="coffeeAmount" min="1" max="500" value="20" required></label>
+          <label>물(g) <input type="number" name="waterAmount" min="1" max="5000" value="320" required></label>
+          <label>온도(℃) <input type="number" name="waterTemp" min="1" max="100" value="93" required></label>
+        </div>
+
+        <label>상세 설명 <textarea name="description" maxlength="2000" placeholder="레시피 설명이나 맛 노트. #으로 태그를 달 수 있어요 (#에티오피아 #플로럴)"></textarea></label>
+
+        <h2>푸어 단계</h2>
+        <div id="steps"></div>
+        <button type="button" class="btn-add" id="add-step">+ 단계 추가</button>
+
+        <p class="error hidden" id="form-error"></p>
+        <button type="submit" class="btn-primary" id="submit-recipe">등록하기</button>
+      </form>
+    </section>
+
+    <section id="view-me" class="profile hidden">
+      <p><strong id="nickname"></strong>님<br><span class="provider" id="provider"></span></p>
+      <form id="profile-form">
+        <label>닉네임 <input name="nickname" maxlength="30" required></label>
+        <p class="error hidden" id="profile-error"></p>
+        <button type="submit" class="btn-primary">회원 정보 저장</button>
+      </form>
+      <button class="btn-logout" id="logout">로그아웃</button>
+      <button class="btn-logout" id="withdraw">회원 탈퇴</button>
+    </section>
+    </div>
   </div>
+</div>
 
-  <div id="welcome" class="hidden">
-    <p><strong id="nickname"></strong>님, 반갑습니다.</p>
-    <button class="btn btn-logout" id="logout">로그아웃</button>
-  </div>
-</main>
+<nav>
+  <a href="#home" data-tab="home"><span class="icon">☕</span>홈</a>
+  <a href="#new" data-tab="new"><span class="icon">➕</span>등록</a>
+  <a href="#mine" data-tab="mine"><span class="icon">★</span>저장한 레시피</a>
+  <a href="#me" data-tab="me"><span class="icon">👤</span>마이</a>
+</nav>
 
-<script>
-  // 백엔드는 별도 오리진이라 API 주소를 명시해야 하고, 세션 쿠키를 실으려면 credentials가 필요하다.
-  // ponytail: 환경 판별이 host 문자열 비교 한 줄. 배포 환경이 셋 이상 되면 빌드 타임 주입으로.
-  const API = location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://api.drippedia.com';
-
-  // 소셜 로그인은 fetch가 아니라 브라우저를 백엔드로 통째로 넘겨야 한다(카카오로 리다이렉트되므로).
-  document.querySelectorAll('[data-login]').forEach(a => {
-    a.href = `${API}/oauth2/authorization/${a.dataset.login}`;
-  });
-
-  // 로그인 여부는 /api/me 응답 코드로만 판단한다. 200이면 세션 있음, 401이면 없음.
-  fetch(`${API}/api/me`, { credentials: 'include' })
-    .then(res => res.ok ? res.json() : null)
-    .then(me => {
-      if (me) {
-        document.getElementById('nickname').textContent = me.nickname;
-        document.getElementById('welcome').classList.remove('hidden');
-      } else {
-        document.getElementById('login').classList.remove('hidden');
-      }
-    });
-
-  document.getElementById('logout').addEventListener('click', async () => {
-    const token = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
-    await fetch(`${API}/logout`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: token ? { 'X-XSRF-TOKEN': decodeURIComponent(token[1]) } : {}
-    });
-    location.reload();
-  });
-</script>
+<script src="app.js"></script>
+<script src="index.js"></script>
 </body>
 </html>
