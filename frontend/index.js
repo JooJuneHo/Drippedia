@@ -57,6 +57,12 @@ function route() {
     return;
   }
 
+  if (name === 'timer' && param) {
+    show('view-timer', '', null);
+    loadTimer(param);
+    return;
+  }
+
   if (name === 'edit' && param) {
     show('view-new', '레시피 수정', null);
     loadForEdit(param);
@@ -83,6 +89,10 @@ const backLink = () =>
   `<a class="back" href="${listHash}">← ${listHash === '#manage' ? '내 레시피 목록으로' : '목록으로'}</a>`;
 
 function show(view, title, tab) {
+  if (view !== 'view-timer') {
+    stopTicking(); // 화면을 떠나면 타이머도 멈춘다
+  }
+
   $('title').textContent = title;
   document.querySelectorAll('#app section').forEach(s => s.classList.add('hidden'));
   $(view).classList.remove('hidden');
@@ -155,20 +165,138 @@ function render(recipes) {
   $('empty').classList.toggle('hidden', recipes.length > 0);
 }
 
+const fetchRecipe = id => fetch(`${API}/api/recipes/${encodeURIComponent(id)}`, { credentials: 'include' })
+  .then(res => res.ok ? res.json() : null);
+
 async function loadDetail(id) {
-  const res = await fetch(`${API}/api/recipes/${encodeURIComponent(id)}`, { credentials: 'include' });
-  if (!res.ok) {
+  const r = await fetchRecipe(id);
+  if (!r) {
     $('view-detail').innerHTML = `${backLink()}
       <p class="empty">레시피를 찾을 수 없습니다.</p>`;
     return;
   }
-  renderDetail(await res.json());
+  renderDetail(r);
 }
 
-// 이미 이스케이프된 문자열에만 쓴다 — #태그만 강조하고 나머지는 그대로 둔다.
-const tagged = html => html.replace(/#[^\s#]+/g, m => `<span class="tag">${m}</span>`);
+async function loadTimer(id) {
+  const r = await fetchRecipe(id);
+  if (!r) {
+    location.hash = `#recipe/${id}`; // 없는 레시피면 상세가 알아서 안내한다
+    return;
+  }
+  renderTimer(r);
+}
+
+// 타이머는 화면 하나뿐이라 상태도 변수 하나로 들고 있는다. base는 멈춰 있던 동안 쌓인 시간.
+let brew = null;
+
+const elapsedMs = () => brew.base + (brew.startedAt ? Date.now() - brew.startedAt : 0);
+
+/** 경과 시간으로 정하는 단계 상태. 다음 단계 시작 시각을 넘겼으면 끝난 단계다. */
+function stepState(steps, i, ms) {
+  const at = steps[i].startTimeSeconds * 1000;
+  const next = steps[i + 1] ? steps[i + 1].startTimeSeconds * 1000 : Infinity;
+  return ms >= next ? 'done' : ms >= at ? 'now' : 'pending';
+}
+
+function renderTimer(r) {
+  $('title').textContent = `${r.title} 타이머`;
+
+  // 부으면서 필요한 건 "이번에 몇 g"보다 "저울이 몇 g이어야 하나"라서 누적량을 같이 들고 간다.
+  let poured = 0;
+  const steps = r.steps.map(s => ({ ...s, total: poured += s.pourAmount }));
+
+  $('view-timer').innerHTML = `
+    <a class="back" href="#recipe/${r.id}">← 레시피로</a>
+    <div class="detail">
+      <p class="method">원두 : ${r.coffeeAmount}g / 물 : ${r.waterAmount}g / 물 온도 : ${r.waterTemp}℃</p>
+
+      <p class="clock" id="clock">0:00</p>
+      <div class="actions">
+        <button type="button" id="timer-toggle">시작</button>
+        <button type="button" id="timer-reset">초기화</button>
+      </div>
+
+      <h2>푸어 단계 <span class="sum">총 ${poured}g</span></h2>
+      <ol class="timeline">${steps.map(s => `
+        <li>
+          <span class="at">${mmss(s.startTimeSeconds)}</span>
+          <span class="pour">${s.pourAmount}g</span>
+          <span class="total">누적 ${s.total}g</span>
+          <span class="note">${esc(s.note ?? '')}</span>
+          <span class="left"></span>
+        </li>`).join('')}
+      </ol>
+    </div>`;
+
+  brew = { steps, base: 0, startedAt: null, handle: null };
+  $('timer-toggle').addEventListener('click', toggleTimer);
+  $('timer-reset').addEventListener('click', resetTimer);
+  paint();
+}
+
+function toggleTimer() {
+  if (brew.startedAt) {
+    brew.base = elapsedMs();
+    stopTicking();
+  } else {
+    brew.startedAt = Date.now();
+    brew.handle = setInterval(paint, 200); // 1초보다 촘촘히 봐야 단계가 제때 넘어간다
+  }
+  paint();
+}
+
+function resetTimer() {
+  stopTicking();
+  brew.base = 0;
+  paint();
+}
+
+function stopTicking() {
+  if (!brew) {
+    return;
+  }
+  clearInterval(brew.handle);
+  brew.handle = null;
+  brew.startedAt = null;
+}
+
+/** 시계와 단계 상태만 갈아 끼운다. 매 틱마다 화면을 다시 그리지 않는다. */
+function paint() {
+  const ms = elapsedMs();
+  const running = Boolean(brew.startedAt);
+
+  $('clock').textContent = mmss(Math.floor(ms / 1000));
+  $('timer-toggle').textContent = running ? '중지' : brew.base ? '계속' : '시작';
+  $('timer-toggle').classList.toggle('on', running);
+
+  document.querySelectorAll('#view-timer .timeline li').forEach((li, i) => {
+    li.className = stepState(brew.steps, i, ms);
+
+    const next = brew.steps[i + 1];
+    li.querySelector('.left').textContent = li.className === 'now' && next
+      ? `다음까지 ${mmss(Math.ceil((next.startTimeSeconds * 1000 - ms) / 1000))}`
+      : '';
+  });
+}
+
+// 이미 이스케이프된 문자열에만 쓴다. 링크와 #태그를 한 번에 훑는 이유는,
+// 따로 돌리면 주소 안의 #조각(https://x.com/a#b)까지 태그로 잡아먹기 때문.
+const LINK_OR_TAG = /(https?:\/\/[^\s<]+)|(#[^\s#<]+)/g;
+
+const formatted = html => html.replace(LINK_OR_TAG, (m, url, tag) => url
+  ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+  : `<span class="tag">${tag}</span>`);
 
 const mmss = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+
+// 상세와 타이머가 같이 쓰는 단계 목록.
+const stepsList = r => `<ol>${r.steps.map(s => `
+  <li>
+    <span class="at">${mmss(s.startTimeSeconds)}</span>
+    <span class="pour">${s.pourAmount}g</span>
+    <span class="note">${esc(s.note ?? '')}</span>
+  </li>`).join('')}</ol>`;
 
 function renderDetail(r) {
   $('title').textContent = r.title;
@@ -190,16 +318,12 @@ function renderDetail(r) {
       <p class="method">${esc(METHODS[r.brewMethod] ?? r.brewMethod)}</p>
       <p class="by">${esc(r.author)} · ${esc(r.createdAt.slice(0, 10).replaceAll('-', '.'))}</p>
       <dl>${rows.map(([label, value]) => `<dt>${label}</dt><dd>${esc(value)}</dd>`).join('')}</dl>
-      ${r.description ? `<p class="desc">${tagged(esc(r.description))}</p>` : ''}
+      ${r.description ? `<p class="desc">${formatted(esc(r.description))}</p>` : ''}
 
       <h2>푸어 단계</h2>
-      <ol>${r.steps.map(s => `
-        <li>
-          <span class="at">${mmss(s.startTimeSeconds)}</span>
-          <span class="pour">${s.pourAmount}g</span>
-          <span class="note">${esc(s.note ?? '')}</span>
-        </li>`).join('')}
-      </ol>
+      ${stepsList(r)}
+
+      <a class="timer" href="#timer/${r.id}">▶ 이 레시피로 브루잉 시작</a>
 
       <div class="actions">
         <button type="button" id="like-toggle" class="${r.liked ? 'on' : ''}">${r.liked ? '♥' : '♡'} 좋아요 ${r.likes ?? 0}</button>

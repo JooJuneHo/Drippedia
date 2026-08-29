@@ -76,7 +76,8 @@
     }
     textarea { min-height: 88px; resize: vertical; line-height: 1.5; }
     .tag { color: #a3552a; font-weight: 600; }
-    .detail .desc { margin: 16px 0 0; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+    .detail .desc { margin: 16px 0 0; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .detail .desc a { color: #a3552a; }
 
     #filter select { width: auto; padding: 8px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; }
     form h2 { font-size: 14px; margin: 12px 0 0; }
@@ -92,6 +93,34 @@
       background: #2b2320; color: #f6f3ef; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
     }
     .error { margin: 0; color: #b3261e; font-size: 13px; }
+
+    /* 브루잉 타이머 */
+    .clock {
+      margin: 20px 0 0; font-size: 44px; font-weight: 600; text-align: center;
+      font-variant-numeric: tabular-nums; letter-spacing: -1px;
+    }
+    #view-timer .actions { justify-content: center; }
+    .timeline li { position: relative; padding: 10px 0 10px 18px; margin-left: 4px; border-left: 2px solid #ece5dd; }
+    .timeline li::before {
+      content: ''; position: absolute; left: -6px; top: 15px;
+      width: 10px; height: 10px; border-radius: 50%; background: #ded5cc;
+    }
+    .timeline li.done { color: #a2938a; }
+    .timeline li.done::before { background: #a3552a; }
+    .timeline li.now { color: #2b2320; font-weight: 600; }
+    .timeline li.now::before { background: #a3552a; box-shadow: 0 0 0 5px rgba(163, 85, 42, 0.15); }
+    .timeline li.pending { color: #a2938a; }
+    .timeline .total { min-width: 66px; font-size: 12px; color: #7a6a60; }
+    .timeline li.now .total { color: #a3552a; }
+    #view-timer h2 .sum { margin-left: 6px; font-weight: 400; font-size: 13px; color: #7a6a60; }
+    .timeline .left { margin-left: auto; color: #a3552a; font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+    /* 타이머는 좋아요·저장과 성격이 다른 '실행' 버튼이라 한 줄을 통째로 쓴다 */
+    .detail .timer {
+      display: block; margin: 24px 0 0; padding: 16px; border-radius: 10px;
+      background: #a3552a; color: #fff; font-size: 16px; font-weight: 600;
+      text-align: center; text-decoration: none; letter-spacing: -0.3px;
+    }
 
     /* 상세 화면 아래 버튼들 */
     .actions { display: flex; gap: 8px; margin-top: 20px; }
@@ -170,6 +199,9 @@
     <!-- 내용은 #recipe/{id} 라우트에서 통째로 그린다 -->
     <section id="view-detail" class="hidden"></section>
 
+    <!-- 브루잉 타이머. #timer/{id}에서 레시피를 다시 받아 그린다 -->
+    <section id="view-timer" class="hidden"></section>
+
     <section id="view-new" class="hidden">
       <form id="recipe-form">
         <label>제목 <input name="title" maxlength="100" placeholder="에티오피아 아침" required></label>
@@ -192,6 +224,7 @@
           <label>물(g) <input type="number" name="waterAmount" min="1" max="5000" value="320" required></label>
           <label>온도(℃) <input type="number" name="waterTemp" min="1" max="100" value="93" required></label>
         </div>
+
 
         <label>상세 설명 <textarea name="description" maxlength="2000" placeholder="레시피 설명이나 맛 노트. #으로 태그를 달 수 있어요 (#에티오피아 #플로럴)"></textarea></label>
 

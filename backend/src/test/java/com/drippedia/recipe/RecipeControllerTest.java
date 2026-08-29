@@ -231,4 +231,20 @@ class RecipeControllerTest {
                 .andExpect(jsonPath("$[0].likes").value(5))
                 .andExpect(jsonPath("$[1].id").value(second.getId()));
     }
+
+    /** 목록 카드는 태그만 보여준다 - 줄바꿈 뒤 본문이나 링크의 #조각이 태그로 딸려 나오면 안 된다. */
+    @Test
+    void 태그는_줄바꿈에서_끊기고_링크는_태그가_아니다() throws Exception {
+        String body = """
+                {"title":"에티오피아 아침","beanName":"예가체프","brewMethod":"V60",
+                 "description":"#산미\\nhttps://ex.com/a#t=30 참고",
+                 "coffeeAmount":20,"waterAmount":320,"waterTemp":93,"steps":%s}
+                """.formatted(ONE_STEP);
+
+        mockMvc.perform(post("/api/recipes").with(loggedIn()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tags.length()").value(1))
+                .andExpect(jsonPath("$.tags[0]").value("#산미"));
+    }
 }
