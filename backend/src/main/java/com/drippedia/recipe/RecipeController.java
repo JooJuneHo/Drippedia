@@ -14,17 +14,21 @@ import com.drippedia.domain.user.UserRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
 import java.util.List;
+import java.util.Comparator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -43,30 +47,52 @@ public class RecipeController {
     /** 사용자를 못 찾았을 때 목록/상세가 통째로 깨지는 것보단 이렇게 표시하는 게 낫다. */
     private static final String UNKNOWN_AUTHOR = "알 수 없음";
 
+    /** 홈에 보여줄 인기 레시피 개수. */
+    private static final int POPULAR_SIZE = 3;
+
     /** 상세 설명에 섞여 있는 #태그. 목록 카드에도 이걸 뽑아서 보여준다. */
     private static final Pattern TAG = Pattern.compile("#[^\s#]+");
 
     /** 메인 화면 목록(최신순). brewMethod를 주면 그 도구만 거른다. 로그인 없이도 볼 수 있다. */
     @GetMapping
     public List<Summary> list(@RequestParam(required = false) String brewMethod,
-                              @RequestParam(required = false) String q) {
-        return summaries(recipeRepository.search(brewMethod, null, null, like(q)));
+                              @RequestParam(required = false) String q,
+                              @RequestParam(required = false) String sort) {
+        return sorted(summaries(recipeRepository.search(brewMethod, null, null, like(q))), sort);
     }
 
     /** 내가 등록한 것만. 이 경로만 SecurityConfig에서 authenticated로 잡아 뒀다(아니면 userId가 null). */
     @GetMapping("/mine")
     public List<Summary> mine(@CurrentUserId Long userId,
                               @RequestParam(required = false) String brewMethod,
-                              @RequestParam(required = false) String q) {
-        return summaries(recipeRepository.search(brewMethod, userId, null, like(q)));
+                              @RequestParam(required = false) String q,
+                              @RequestParam(required = false) String sort) {
+        return sorted(summaries(recipeRepository.search(brewMethod, userId, null, like(q))), sort);
     }
 
     /** 내가 저장(북마크)한 것만. /mine과 같은 이유로 authenticated. */
     @GetMapping("/saved")
     public List<Summary> saved(@CurrentUserId Long userId,
                                @RequestParam(required = false) String brewMethod,
-                               @RequestParam(required = false) String q) {
-        return summaries(recipeRepository.search(brewMethod, null, userId, like(q)));
+                               @RequestParam(required = false) String q,
+                               @RequestParam(required = false) String sort) {
+        return sorted(summaries(recipeRepository.search(brewMethod, null, userId, like(q))), sort);
+    }
+
+    /**
+     * 홈 오른쪽에 붙는 이번 달 인기 레시피. 이번 달 1일부터 지금까지 눌린 좋아요만 센다.
+     * ponytail: 매 요청 집계. 레시피가 많아져 느려지면 그때 캐시하거나 집계 컬럼을 둔다.
+     */
+    @GetMapping("/popular")
+    public List<Summary> popular() {
+        LocalDateTime since = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        List<Long> ids = recipeLikeRepository.topRecipeIds(since, PageRequest.of(0, POPULAR_SIZE));
+
+        // findAllById는 넘긴 순서를 지켜주지 않아서 좋아요 순서대로 다시 세운다.
+        Map<Long, Recipe> byId = recipeRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Recipe::getId, r -> r));
+
+        return summaries(ids.stream().map(byId::get).filter(Objects::nonNull).toList());
     }
 
     /** 상세. 목록과 달리 푸어 단계까지 순서대로 딸려 나간다(브루잉 타이머가 이걸 그대로 쓴다). */
@@ -232,6 +258,21 @@ public class RecipeController {
     /** (recipeId, 개수) 쌍을 찾아 쓰기 좋게 Map으로. 0건인 레시피는 아예 안 들어 있다. */
     private static Map<Long, Long> counts(List<Object[]> rows) {
         return rows.stream().collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
+    }
+
+    /**
+     * 정렬. 좋아요/저장 수는 목록을 만들면서 이미 세어 뒀으니 그걸로 다시 세운다.
+     * 같은 수끼리는 정렬이 안정적이라 쿼리가 준 최신순이 그대로 유지된다.
+     * ponytail: 목록을 통째로 읽어 오는 구조라 메모리 정렬. 페이징이 붙으면 그때 쿼리 order by로.
+     */
+    private List<Summary> sorted(List<Summary> summaries, String sort) {
+        Comparator<Summary> by = switch (sort == null ? "" : sort) {
+            case "popular" -> Comparator.comparingLong(Summary::likes).reversed();
+            case "saves" -> Comparator.comparingLong(Summary::saves).reversed();
+            default -> null; // 최신순은 쿼리가 이미 맞춰 준다
+        };
+
+        return by == null ? summaries : summaries.stream().sorted(by).toList();
     }
 
     /** 빈 검색어는 조건 자체를 끄고, 아니면 대소문자 구분 없는 부분 일치로 만든다. */

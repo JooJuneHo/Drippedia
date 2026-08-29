@@ -3,6 +3,8 @@ package com.drippedia.recipe;
 import com.drippedia.domain.pourstep.PourStep;
 import com.drippedia.domain.pourstep.PourStepRepository;
 import com.drippedia.domain.recipe.Recipe;
+import com.drippedia.domain.recipe.RecipeLike;
+import com.drippedia.domain.recipe.RecipeLikeRepository;
 import com.drippedia.domain.recipe.RecipeRepository;
 import com.drippedia.domain.user.AuthProvider;
 import com.drippedia.domain.user.User;
@@ -39,6 +41,7 @@ class RecipeControllerTest {
     @Autowired private RecipeRepository recipeRepository;
     @Autowired private PourStepRepository pourStepRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private RecipeLikeRepository recipeLikeRepository;
 
     /** 로그인 사용자 흉내. @CurrentUserId가 principal의 attributes["userId"]를 읽는다. */
     private RequestPostProcessor loggedIn() {
@@ -209,5 +212,23 @@ class RecipeControllerTest {
         mockMvc.perform(get("/api/recipes/" + other.getId()).with(loggedIn()))
                 .andExpect(jsonPath("$.liked").value(false))
                 .andExpect(jsonPath("$.likes").value(0));
+    }
+    @Test
+    void 인기_레시피는_이번_달_좋아요가_많은_순서다() throws Exception {
+        Recipe popular = othersRecipe();
+        Recipe second = othersRecipe();
+        // 개발 DB를 그대로 쓰는 테스트라, 손으로 누른 좋아요에 밀리지 않게 넉넉히 눌러 둔다.
+        for (long user = 1; user <= 5; user++) {
+            recipeLikeRepository.save(new RecipeLike(user, popular.getId()));
+        }
+        for (long user = 1; user <= 4; user++) {
+            recipeLikeRepository.save(new RecipeLike(user, second.getId()));
+        }
+
+        mockMvc.perform(get("/api/recipes/popular"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(popular.getId()))
+                .andExpect(jsonPath("$[0].likes").value(5))
+                .andExpect(jsonPath("$[1].id").value(second.getId()));
     }
 }

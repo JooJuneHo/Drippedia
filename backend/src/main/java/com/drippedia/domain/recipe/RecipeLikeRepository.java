@@ -1,9 +1,11 @@
 package com.drippedia.domain.recipe;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -23,4 +25,12 @@ public interface RecipeLikeRepository extends JpaRepository<RecipeLike, Long> {
     void deleteByRecipeId(Long recipeId);
 
     void deleteByUserId(Long userId);
+    /** 인기 레시피용. since 이후에 눌린 좋아요만 세서 많은 순으로 recipeId를 준다(개수는 Pageable로 자른다). */
+    @Query("""
+            select l.recipeId from RecipeLike l
+            where l.createdAt >= :since
+            group by l.recipeId
+            order by count(l) desc
+            """)
+    List<Long> topRecipeIds(@Param("since") LocalDateTime since, Pageable pageable);
 }
