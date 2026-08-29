@@ -41,7 +41,6 @@ const options = Object.entries(METHODS)
   .map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
 $('grinders').innerHTML = GRINDERS.map(g => `<option value="${esc(g)}">`).join('');
 
-$('brewMethod').insertAdjacentHTML('beforeend', options);   // 필터: "전체 도구" 뒤에 붙인다
 document.querySelector('[name=brewMethod]').innerHTML = options; // 등록 폼: 하나는 반드시 고른다
 
 /**
@@ -69,6 +68,7 @@ function route() {
   if (TABS[tab].view === 'view-list') {
     listHash = `#${tab}`; // 상세에서 '목록으로'가 돌아올 곳
     loadRecipes(TABS[tab].path);
+    loadPopular(tab === 'home'); // 인기 레시피는 홈에만
   }
   if (tab === 'new') {
     resetForm(); // 수정하다 나갔을 수 있으니 빈 폼으로 되돌린다
@@ -98,8 +98,8 @@ function show(view, title, tab) {
 
 async function loadRecipes(path) {
   const params = new URLSearchParams();
-  if ($('brewMethod').value) params.set('brewMethod', $('brewMethod').value);
   if ($('q').value.trim()) params.set('q', $('q').value.trim());
+  if ($('sort').value) params.set('sort', $('sort').value);
 
   const query = params.toString();
   const res = await fetch(`${API}/api/recipes${path}${query ? `?${query}` : ''}`, { credentials: 'include' });
@@ -107,6 +107,32 @@ async function loadRecipes(path) {
   $('empty').textContent = params.has('q') ? '검색 결과가 없습니다.'
     : path === '/saved' ? '저장한 레시피가 없습니다.' : '아직 등록된 레시피가 없습니다.';
   render(res.ok ? await res.json() : []);
+}
+
+/**
+ * 이번 달 좋아요가 많은 세 개. 목록·검색과는 무관하게 홈에서 한 번만 받아온다.
+ * 아직 아무도 좋아요를 안 눌렀으면 패널째 감춘다.
+ */
+async function loadPopular(show) {
+  if (!show) {
+    $('popular').classList.add('hidden');
+    return;
+  }
+
+  const res = await fetch(`${API}/api/recipes/popular`, { credentials: 'include' });
+  const top = res.ok ? await res.json() : [];
+  $('popular').classList.toggle('hidden', top.length === 0);
+  $('popular').innerHTML = `
+    <h2>이번 달 인기</h2>
+    <ol>${top.map((r, i) => `
+      <li>
+        <a href="#recipe/${r.id}">
+          <span class="rank">${i + 1}</span>
+          <span class="name">${esc(r.title)}</span>
+          <span class="likes">♥${r.likes}</span>
+        </a>
+      </li>`).join('')}
+    </ol>`;
 }
 
 function render(recipes) {
@@ -122,7 +148,7 @@ function render(recipes) {
       ${r.tags?.length ? `<p class="tags">${r.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</p>` : ''}
         <div class="bottom">
           <span class="spec">1:${r.ratio.toFixed(1)} · ${r.coffeeAmount}g / ${r.waterAmount}g · ${r.waterTemp}℃</span>
-          <span class="by">${esc(r.author)}</span>
+          <span class="by">♥${r.likes ?? 0} ★${r.saves ?? 0} · ${esc(r.author)}</span>
         </div>
       </a>
     </li>`).join('');
@@ -176,22 +202,27 @@ function renderDetail(r) {
       </ol>
 
       <div class="actions">
-        <button type="button" id="save-toggle" class="${r.saved ? 'on' : ''}">${r.saved ? '★ 저장됨' : '☆ 저장하기'}</button>
+        <button type="button" id="like-toggle" class="${r.liked ? 'on' : ''}">${r.liked ? '♥' : '♡'} 좋아요 ${r.likes ?? 0}</button>
+        <button type="button" id="save-toggle" class="${r.saved ? 'on' : ''}">${r.saved ? '★' : '☆'} 저장 ${r.saves ?? 0}</button>
         ${r.mine ? `<a href="#edit/${r.id}">수정</a>
         <button type="button" id="delete-recipe" class="danger">삭제</button>` : ''}
       </div>
     </div>`;
 
-  $('save-toggle').addEventListener('click', () => toggleSave(r));
+  $('like-toggle').addEventListener('click', () => toggle(r.id, 'like', r.liked));
+  $('save-toggle').addEventListener('click', () => toggle(r.id, 'save', r.saved));
   if (r.mine) {
     $('delete-recipe').addEventListener('click', () => removeRecipe(r.id));
   }
 }
 
-/** 저장/저장 취소. 버튼 상태만 바뀌니 응답을 기다렸다가 그대로 다시 그린다. */
-async function toggleSave(r) {
-  const res = await fetch(`${API}/api/recipes/${r.id}/save`, {
-    method: r.saved ? 'DELETE' : 'POST',
+/**
+ * 좋아요/저장 켜고 끄기. kind가 그대로 URL 조각이다(like / save).
+ * 개수는 서버가 세니 응답 뒤에 상세를 다시 받아온다 - 화면에서 숫자를 따로 굴리지 않는다.
+ */
+async function toggle(id, kind, on) {
+  const res = await fetch(`${API}/api/recipes/${id}/${kind}`, {
+    method: on ? 'DELETE' : 'POST',
     credentials: 'include',
     headers: csrfHeader()
   });
@@ -200,11 +231,9 @@ async function toggleSave(r) {
     location.replace('login.html');
     return;
   }
-  if (!res.ok) {
-    return;
+  if (res.ok) {
+    loadDetail(id);
   }
-
-  renderDetail({ ...r, saved: !r.saved });
 }
 
 async function removeRecipe(id) {
@@ -324,7 +353,7 @@ $('recipe-form').addEventListener('submit', async e => {
 });
 
 addEventListener('hashchange', route);
-$('brewMethod').addEventListener('change', route);
+$('sort').addEventListener('change', route);
 
 // 타이핑마다 요청하지 않게 잠깐 모았다 보낸다.
 let searchTimer;

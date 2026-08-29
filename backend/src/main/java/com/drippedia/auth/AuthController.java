@@ -1,6 +1,7 @@
 package com.drippedia.auth;
 
 import com.drippedia.domain.user.User;
+import com.drippedia.domain.recipe.RecipeLikeRepository;
 import com.drippedia.domain.recipe.RecipeSaveRepository;
 import com.drippedia.domain.user.UserRepository;
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ public class AuthController {
 
     private final UserRepository userRepository;
     private final RecipeSaveRepository recipeSaveRepository;
+    private final RecipeLikeRepository recipeLikeRepository;
 
     /** 로그인 상태 확인용. 프론트가 첫 진입에 이걸 찔러보고 401이면 로그인 버튼을 보여주면 된다. */
     @GetMapping("/me")
@@ -54,6 +56,7 @@ public class AuthController {
     @Transactional
     public ResponseEntity<Void> withdraw(@CurrentUserId Long userId) {
         recipeSaveRepository.deleteByUserId(userId);
+        recipeLikeRepository.deleteByUserId(userId);
         userRepository.deleteById(userId);
 
         return ResponseEntity.noContent().build();
