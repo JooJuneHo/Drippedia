@@ -23,7 +23,7 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
                    or lower(r.beanName) like :q
                    or lower(r.roaster) like :q
                    or lower(r.description) like :q)
-            order by r.createdAt desc
+            order by r.createdAt desc, r.id desc
             """)
     List<Recipe> search(@Param("brewMethod") String brewMethod,
                         @Param("authorId") Long authorId,

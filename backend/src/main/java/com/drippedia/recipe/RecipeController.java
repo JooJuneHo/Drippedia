@@ -24,7 +24,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.regex.MatchResult;
-import java.util.regex.Pattern;
 import java.util.List;
 import java.util.Comparator;
 import java.util.Map;
@@ -50,8 +49,11 @@ public class RecipeController {
     /** 홈에 보여줄 인기 레시피 개수. */
     private static final int POPULAR_SIZE = 3;
 
-    /** 상세 설명에 섞여 있는 #태그. 목록 카드에도 이걸 뽑아서 보여준다. */
-    private static final Pattern TAG = Pattern.compile("#[^\s#]+");
+    /**
+     * 상세 설명에 섞여 있는 #태그. 목록 카드는 이것만 보여준다.
+     * 공백/줄바꿈에서 끊고, 앞에 글자가 붙어 있으면(링크 뒤의 #조각 등) 태그로 안 친다.
+     */
+    private static final java.util.regex.Pattern TAG = java.util.regex.Pattern.compile("(?<!\\S)#[^\\s#]+");
 
     /** 메인 화면 목록(최신순). brewMethod를 주면 그 도구만 거른다. 로그인 없이도 볼 수 있다. */
     @GetMapping
