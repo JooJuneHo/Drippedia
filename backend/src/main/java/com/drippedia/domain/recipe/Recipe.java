@@ -30,13 +30,19 @@ public class Recipe {
     private String title;
 
     private String beanName;
-    private String roaster;
-    private String origin;
-    private String roastLevel;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private BrewMethod brewMethod;
+    /** 원두 구입 링크. http/https만 들어온다 - 컨트롤러가 걸러 준다. */
+    @Column(length = 500)
+    private String purchaseUrl;
+
+    private String origin;
+
+    @Column(nullable = false, length = 50)
+    private String dripper;
+
+    /** 핫 / 아이스. 예전 레시피는 값이 없을 수 있어 컬럼은 널을 허용한다(폼에서는 필수). */
+    @Column(length = 10)
+    private String serveType;
 
     @Column(nullable = false)
     private Integer coffeeAmount; // 단위: g
@@ -48,6 +54,8 @@ public class Recipe {
     private Integer waterTemp; // 단위: 섭씨
 
     private String grindSize;
+
+    private String grinder;
 
     private Integer totalBrewTimeSeconds;
 
@@ -64,24 +72,43 @@ public class Recipe {
     private LocalDateTime updatedAt;
 
     @Builder
-    public Recipe(Long authorId, String title, String beanName, String roaster, String origin,
-                  String roastLevel, BrewMethod brewMethod, Integer coffeeAmount, Integer waterAmount,
-                  Integer waterTemp, String grindSize, Integer totalBrewTimeSeconds,
+    public Recipe(Long authorId, String title, String beanName, String purchaseUrl, String origin,
+                  String dripper, String serveType, Integer coffeeAmount, Integer waterAmount,
+                  Integer waterTemp, String grindSize, String grinder, Integer totalBrewTimeSeconds,
                   String description, String tastingNote) {
         this.authorId = authorId;
         this.title = title;
         this.beanName = beanName;
-        this.roaster = roaster;
+        this.purchaseUrl = purchaseUrl;
         this.origin = origin;
-        this.roastLevel = roastLevel;
-        this.brewMethod = brewMethod;
+        this.dripper = dripper;
+        this.serveType = serveType;
         this.coffeeAmount = coffeeAmount;
         this.waterAmount = waterAmount;
         this.waterTemp = waterTemp;
         this.grindSize = grindSize;
+        this.grinder = grinder;
         this.totalBrewTimeSeconds = totalBrewTimeSeconds;
         this.description = description;
         this.tastingNote = tastingNote;
+    }
+
+    /** 수정 화면에서 받은 값으로 통째로 덮어쓴다. authorId/createdAt은 손대지 않는다. */
+    public void update(String title, String beanName, String purchaseUrl, String origin,
+                       String dripper, String serveType, Integer coffeeAmount, Integer waterAmount, Integer waterTemp,
+                       String grindSize, String grinder, String description) {
+        this.title = title;
+        this.beanName = beanName;
+        this.purchaseUrl = purchaseUrl;
+        this.origin = origin;
+        this.dripper = dripper;
+        this.serveType = serveType;
+        this.coffeeAmount = coffeeAmount;
+        this.waterAmount = waterAmount;
+        this.waterTemp = waterTemp;
+        this.grindSize = grindSize;
+        this.grinder = grinder;
+        this.description = description;
     }
 
     @PrePersist

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drippedia 로그인</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #f6f3ef; color: #2b2320;
+      font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    }
+    main { width: 100%; max-width: 340px; padding: 24px; text-align: center; visibility: hidden; }
+    h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: -0.5px; }
+    p.sub { margin: 0 0 40px; color: #7a6a60; font-size: 14px; }
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 14px; margin-bottom: 10px;
+      border: 1px solid transparent; border-radius: 8px;
+      font-size: 15px; font-weight: 600; text-decoration: none; cursor: pointer;
+    }
+    .btn-google { background: #fff; color: #3c4043; border-color: #dadce0; }
+    .btn-kakao { background: #fee500; color: #191600; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Drippedia</h1>
+  <p class="sub">핸드드립 레시피를 기록하고, 그대로 따라 내려보세요.</p>
+  <a class="btn btn-google" data-login="google">Google로 시작하기</a>
+  <a class="btn btn-kakao" data-login="kakao">카카오로 시작하기</a>
+</main>
+
+<script src="app.js"></script>
+<script>
+  // 소셜 로그인은 fetch가 아니라 브라우저를 백엔드로 통째로 넘겨야 한다(카카오로 리다이렉트되므로).
+  document.querySelectorAll('[data-login]').forEach(a => {
+    a.href = `${API}/oauth2/authorization/${a.dataset.login}`;
+  });
+
+  // 이미 로그인돼 있으면 로그인 버튼을 보여줄 이유가 없다. 판단 전까지는 화면을 감춰 깜빡임을 막는다.
+  fetchMe().then(me => {
+    if (me) {
+      location.replace('index.html');
+    } else {
+      document.querySelector('main').style.visibility = 'visible';
+    }
+  });
+</script>
+</body>
+</html>
