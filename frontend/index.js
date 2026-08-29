@@ -35,8 +35,8 @@ const TABS = {
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 
-// 로그인 안 돼 있으면 로그인 화면으로 넘긴다.
-fetchMe().then(me => {
+// 로그인 안 돼 있으면 로그인 화면으로 넘긴다. CSRF 토큰도 같이 받아 둔다(쓰기 요청에 필요).
+Promise.all([fetchMe(), loadCsrf()]).then(([me]) => {
   if (!me) {
     location.replace('login.html');
     return;
