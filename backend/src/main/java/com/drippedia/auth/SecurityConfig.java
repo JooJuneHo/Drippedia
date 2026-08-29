@@ -32,6 +32,13 @@ public class SecurityConfig {
     @Value("${app.cookie-domain:}")
     private String cookieDomain;
 
+    // 세션 쿠키에 준 값을 그대로 따라간다. 배포에서는 none/true(= cross-site 허용), 로컬은 lax/false.
+    @Value("${server.servlet.session.cookie.same-site:lax}")
+    private String cookieSameSite;
+
+    @Value("${server.servlet.session.cookie.secure:false}")
+    private boolean cookieSecure;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
@@ -83,11 +90,19 @@ public class SecurityConfig {
         return source;
     }
 
+    /**
+     * CSRF 쿠키도 세션 쿠키와 같은 SameSite/Secure로 맞춘다.
+     * 프론트/백이 다른 도메인이면 SameSite=None; Secure가 아닌 쿠키는 브라우저가 버린다.
+     */
     private CookieCsrfTokenRepository csrfTokenRepository() {
         CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        if (!cookieDomain.isBlank()) {
-            repository.setCookieCustomizer(cookie -> cookie.domain(cookieDomain));
-        }
+        repository.setCookieCustomizer(cookie -> {
+            cookie.sameSite(cookieSameSite);
+            cookie.secure(cookieSecure);
+            if (!cookieDomain.isBlank()) {
+                cookie.domain(cookieDomain);
+            }
+        });
         return repository;
     }
 

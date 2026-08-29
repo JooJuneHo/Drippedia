@@ -11,9 +11,13 @@ spring:
     name: drippedia
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/drippedia
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/drippedia}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
+    hikari:
+      # Supabase 무료 플랜의 풀러는 동시 접속 수가 빠듯하다. 테스트는 컨텍스트마다 풀을 하나씩 여니
+      # 기본값(10)이면 금방 한도를 넘어 "dialect를 못 정한다"는 모양으로 터진다.
+      maximum-pool-size: ${DB_POOL_SIZE:5}
 
   jpa:
     hibernate:
@@ -51,11 +55,22 @@ spring:
 # 프론트가 별도 오리진(app.도메인)에 배포되므로 CORS/리다이렉트 대상을 여기서 잡는다.
 # cookie-domain은 프론트 JS가 XSRF-TOKEN 쿠키를 읽어야 해서 상위 도메인으로 내려주는 값.
 # 로컬은 host가 localhost로 같아서(포트 달라도 쿠키 공유) 비워두면 된다.
+# 프론트/백이 완전히 다른 도메인(vercel.app <-> 백엔드 호스트)이면 모든 요청이 cross-site라
+# 쿠키에 SameSite=None; Secure가 없으면 브라우저가 세션 쿠키를 통째로 버린다 = 로그인이 안 붙는다.
+# 로컬은 http라 Secure 쿠키를 못 써서 기본값은 lax/false.
+server:
+  servlet:
+    session:
+      cookie:
+        same-site: ${COOKIE_SAME_SITE:lax}
+        secure: ${COOKIE_SECURE:false}
+
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   cookie-domain: ${COOKIE_DOMAIN:}
 
+# 배포에서는 SQL_LOG_LEVEL=off. 느린 데다 bind 로그에 값이 그대로 찍힌다.
 logging:
   level:
-    org.hibernate.SQL: debug
-    org.hibernate.orm.jdbc.bind: trace
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:debug}
+    org.hibernate.orm.jdbc.bind: ${SQL_LOG_LEVEL:trace}

@@ -15,49 +15,90 @@
     #app { max-width: 720px; margin: 0 auto; padding: 20px 16px 88px; visibility: hidden; }
 
     h1 { font-size: 22px; margin: 0 0 20px; letter-spacing: -0.5px; }
+    h1:empty { display: none; } /* 상세처럼 제목을 화면 안에서 그리는 경우 */
+
 
     ul#recipes { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
     li.card { background: #fff; border: 1px solid #ece5dd; border-radius: 12px; }
     li.card > a { display: block; padding: 16px; color: inherit; text-decoration: none; }
-    .card .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
     .card h2 { font-size: 16px; margin: 0; }
-    .card .method { font-size: 12px; color: #a3552a; font-weight: 600; white-space: nowrap; }
+    /* 핫/아이스는 제목 옆에 붙여 한눈에 갈리게 한다 */
+    .card .serve {
+      margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; vertical-align: 2px; white-space: nowrap;
+    }
+    .card .serve.hot { background: #fbeee7; color: #a3552a; }
+    .card .serve.ice { background: #e8f1f7; color: #3d6d8f; }
     .card .bean { margin: 6px 0 0; font-size: 13px; color: #7a6a60; }
     .card .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; font-size: 12px; }
-    .card .bottom { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 10px; }
-    .card .spec { font-size: 13px; color: #4a3e37; }
+    .card .bottom { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 12px; }
+    /* 수치는 붙여 쓰면 다 한 덩어리로 보여서 항목마다 라벨을 단 알약으로 끊는다 */
+    .card .spec { display: flex; flex-wrap: wrap; gap: 6px; }
+    .card .fig {
+      padding: 3px 9px; background: #faf7f4; border: 1px solid #f0ebe5; border-radius: 999px;
+      font-size: 12px; color: #2b2320; font-weight: 500; white-space: nowrap;
+    }
+    .card .fig em { margin-right: 5px; font-style: normal; font-weight: 400; color: #a2938a; }
     .card .by { font-size: 12px; color: #a2938a; white-space: nowrap; }
+    .card .heart { color: #e0393e; font-weight: 600; }
+    .card .mark { margin-left: 4px; color: #3d6d8f; font-weight: 600; }
+    /* 아이콘은 글자 색을 따라간다(fill: currentColor) */
+    .ico { width: 11px; height: 11px; vertical-align: -1px; }
     .empty { color: #7a6a60; font-size: 14px; text-align: center; padding: 40px 0; }
+    #sentinel { height: 1px; } /* 높이가 0이면 화면에 들어온 걸로 안 쳐 주는 브라우저가 있다 */
 
-    /* 목록 + 오른쪽 인기 레시피. 좁은 화면에서는 인기가 목록 아래로 내려간다 */
-    .list-wrap { display: flex; gap: 12px; align-items: start; }
-    .list-main { flex: 1; min-width: 0; }
+    /* 목록 위에 얹는 이번 달 인기 레시피 */
     #popular {
-      width: 190px; flex: none; background: #fff; border: 1px solid #ece5dd;
+      margin-bottom: 16px; background: #fff; border: 1px solid #ece5dd;
       border-radius: 12px; padding: 14px 16px;
     }
-    #popular h2 { margin: 0 0 10px; font-size: 13px; color: #7a6a60; }
-    #popular ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
-    #popular a { display: flex; gap: 8px; align-items: baseline; color: inherit; text-decoration: none; font-size: 13px; }
-    #popular .rank { color: #a3552a; font-weight: 600; font-variant-numeric: tabular-nums; }
-    #popular .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #popular .likes { color: #a2938a; font-size: 12px; white-space: nowrap; }
-    @media (max-width: 560px) {
-      .list-wrap { flex-direction: column; }
-      #popular { width: 100%; }
+    /* 패널 위에 통째로 얹는 머리띠. 목록 제목이라기보다 간판처럼 보이게 */
+    #popular h2 {
+      margin: -14px -16px 12px; padding: 11px 16px; border-radius: 11px 11px 0 0;
+      background: #2b2320; color: #f6f3ef; font-size: 14px; font-weight: 700; letter-spacing: -0.3px;
     }
+    #popular ol { margin: 0; padding: 0; list-style: none; }
+    #popular li + li { margin-top: 10px; padding-top: 10px; border-top: 1px solid #f2ede7; }
+    #popular a { display: flex; gap: 8px; align-items: center; color: inherit; text-decoration: none; font-size: 13px; }
+    /* 등수는 메달처럼 - 1·2·3이 색으로 갈린다 */
+    #popular .rank {
+      display: flex; align-items: center; justify-content: center; flex: none;
+      width: 19px; height: 19px; border-radius: 50%;
+      background: #ded5cc; color: #fff; font-size: 11px; font-weight: 700;
+    }
+    #popular .rank.r1 { background: #d9a520; }
+    #popular .rank.r2 { background: #b0aca6; }
+    #popular .rank.r3 { background: #b47a45; }
+    #popular li:first-child .name { font-weight: 600; }
+    #popular .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #popular .likes { color: #e0393e; font-size: 12px; font-weight: 600; white-space: nowrap; }
 
     #filter { display: flex; gap: 8px; margin-bottom: 16px; }
     #filter input { flex: 1; min-width: 0; padding: 8px 14px; border-radius: 999px; font-size: 13px; }
 
     /* 상세 */
-    .back { display: inline-block; margin-bottom: 12px; color: #7a6a60; font-size: 13px; text-decoration: none; }
+    /* 뒤로가기는 링크보다 버튼처럼 - 손이 가는 자리라 눌리는 물건으로 보이게 */
+    .back {
+      display: inline-block; margin-bottom: 12px; padding: 7px 13px;
+      background: #fff; border: 1px solid #ded5cc; border-radius: 999px;
+      color: #7a6a60; font-size: 13px; font-weight: 500; text-decoration: none;
+    }
+    .back:hover { border-color: #a3552a; color: #a3552a; }
     .detail { background: #fff; border: 1px solid #ece5dd; border-radius: 12px; padding: 20px; }
+    .detail .page-title { margin: 0 0 6px; font-size: 20px; }
     .detail .method { margin: 0 0 4px; color: #a3552a; font-size: 13px; font-weight: 600; }
     .detail .by { margin: 0 0 16px; color: #a2938a; font-size: 12px; }
-    .detail dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
-    .detail dt { color: #7a6a60; font-size: 13px; }
-    .detail dd { margin: 0; }
+    .detail .buy { margin: 12px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+    .detail .buy a { color: #a3552a; font-weight: 600; text-decoration: none; }
+    /* 항목/내용이 한눈에 갈리게 라벨 칸에 색을 깔고 줄마다 선을 긋는다 */
+    .detail dl {
+      display: grid; grid-template-columns: 92px 1fr; margin: 0; font-size: 14px;
+      border: 1px solid #ece5dd; border-radius: 10px; overflow: hidden;
+    }
+    .detail dt, .detail dd { padding: 10px 14px; border-bottom: 1px solid #f2ede7; }
+    .detail dt { background: #faf7f4; color: #7a6a60; font-size: 12px; }
+    .detail dd { margin: 0; font-weight: 500; }
+    .detail dl > :nth-last-child(-n+2) { border-bottom: none; } /* 마지막 줄은 바깥 테두리와 겹친다 */
     .detail h2 { margin: 24px 0 12px; font-size: 15px; }
     .detail ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
     .detail ol li { display: flex; align-items: baseline; gap: 10px; font-size: 14px; }
@@ -67,16 +108,36 @@
 
     /* 등록 폼 */
     form { display: grid; gap: 12px; }
-    label { display: grid; gap: 4px; font-size: 12px; color: #7a6a60; }
+    /* 라벨과 입력칸을 테두리 하나로 묶는다. 라벨은 그 상자의 머리글 */
+    label { display: block; background: #fff; border: 1px solid #ded5cc; border-radius: 8px; overflow: hidden; }
+    label > span {
+      display: block; padding: 7px 12px 5px; border-bottom: 1px solid #f2ede7;
+      background: #faf4f9; color: #7a6a60; font-size: 11px;
+    }
+    label:focus-within { border-color: #a3552a; }
+    /* 필수 표시는 라벨 글자 바로 뒤에 */
+    label:has([required]) > span::after { content: ' *'; color: #b3261e; font-weight: 600; }
+    .form-hint { margin: 0; color: #a2938a; font-size: 12px; }
+    .form-hint b { color: #b3261e; font-weight: 400; }
     .row { display: flex; gap: 8px; }
     .row label { flex: 1; }
+    .row label.wide { flex: 2; } /* 제목처럼 옆칸보다 길어야 하는 것 */
     input, select, textarea {
       width: 100%; padding: 10px 12px; border: 1px solid #ded5cc; border-radius: 8px;
       background: #fff; color: #2b2320; font-size: 14px; font-family: inherit;
     }
+    /* 라벨 상자 안에 들어간 칸은 테두리를 상자에 맡긴다 */
+    label > input, label > select, label > textarea {
+      border: none; border-radius: 0; padding: 9px 12px; outline-offset: -2px; font-weight: 500;
+    }
+    /* 내가 친 글자와 예시 글자가 헷갈리지 않게: 입력값은 진하게, 플레이스홀더는 흐리게 */
+    ::placeholder { color: #c9bfb6; font-weight: 400; opacity: 1; }
     textarea { min-height: 88px; resize: vertical; line-height: 1.5; }
     .tag { color: #a3552a; font-weight: 600; }
-    .detail .desc { margin: 16px 0 0; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .detail .desc {
+      margin: 0; padding: 14px 16px; background: #faf7f4; border: 1px solid #f0ebe5; border-radius: 10px;
+      font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere;
+    }
     .detail .desc a { color: #a3552a; }
 
     #filter select { width: auto; padding: 8px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; }
@@ -93,6 +154,34 @@
       background: #2b2320; color: #f6f3ef; font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
     }
     .error { margin: 0; color: #b3261e; font-size: 13px; }
+
+    /* 댓글 + 대댓글(한 단계). 대댓글은 왼쪽 선으로 들여쓴다 */
+    #comments { display: grid; gap: 10px; }
+    .comments .comment { padding: 12px 14px; background: #faf7f4; border: 1px solid #f0ebe5; border-radius: 10px; }
+    /* 대댓글은 원댓글 안에 한 칸 들어가 앉는다. 배경을 뒤집어 원댓글과 갈라 놓는다 */
+    .comments .reply {
+      margin: 10px 0 0 16px; padding: 10px 12px;
+      background: #fff; border-color: #ece5dd; border-left: 3px solid #ded5cc; border-radius: 8px;
+    }
+    .comments .by { margin: 0 0 6px; color: #a2938a; font-size: 12px; font-weight: 600; }
+    .comments .reply .by::before { content: '↳ '; color: #ded5cc; }
+    .comments .text { margin: 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .comments .text a { color: #a3552a; }
+    .comments .tools { display: flex; gap: 6px; margin: 10px 0 0; }
+    .comments .tools button {
+      padding: 4px 10px; border: 1px solid #e2dad2; border-radius: 999px; background: #fff;
+      color: #7a6a60; font-size: 12px; font-family: inherit; line-height: 1.5; cursor: pointer;
+    }
+    .comments .tools button:hover { border-color: #a3552a; color: #a3552a; }
+    .comments .tools .danger { color: #b3261e; }
+    .comments .tools .danger:hover { border-color: #b3261e; color: #b3261e; }
+    .comments .empty { padding: 16px 0; text-align: left; }
+    .comment-form { display: flex; gap: 8px; align-items: start; margin-top: 12px; }
+    .comment-form textarea { min-height: 44px; font-size: 13px; }
+    .comment-form button {
+      flex: none; padding: 10px 14px; border: 1px solid #ded5cc; border-radius: 8px;
+      background: #fff; color: #4a3e37; font-size: 13px; font-family: inherit; cursor: pointer;
+    }
 
     /* 브루잉 타이머 */
     .clock {
@@ -129,6 +218,10 @@
       color: #4a3e37; font-size: 13px; font-family: inherit; text-decoration: none; cursor: pointer;
     }
     .actions .on { background: #2b2320; border-color: #2b2320; color: #f6f3ef; }
+    /* 좋아요·저장은 켜져도 어두워지지 않고 아이콘과 글자에 색이 들어온다 */
+    .actions .like .ico, .actions .save .ico { width: 13px; height: 13px; vertical-align: -2px; }
+    .actions .like.on { background: #fdf0f0; border-color: #e0393e; color: #e0393e; }
+    .actions .save.on { background: #eef4f8; border-color: #3d6d8f; color: #3d6d8f; }
     .actions .danger { color: #b3261e; }
 
     /* 마이: 왼쪽 메뉴 + 오른쪽 내용. side는 <nav>를 쓰면 하단 탭바 스타일(position: fixed)에 걸린다 */
@@ -159,6 +252,7 @@
       color: #a2938a; font-size: 11px; line-height: 1.6;
     }
     nav a .icon { display: block; font-size: 18px; }
+    nav a .icon svg { width: 17px; height: 17px; } /* 이모지 아이콘들과 눈높이를 맞춘 크기 */
     nav a.on { color: #2b2320; font-weight: 600; }
 
     .hidden { display: none; }
@@ -178,6 +272,8 @@
 
     <div class="pane">
     <section id="view-list">
+      <!-- 홈에서만 붙는 이번 달 인기 레시피. 내용은 JS가 통째로 그린다 -->
+      <aside id="popular" class="hidden"></aside>
       <div id="filter">
         <input type="search" id="q" placeholder="제목·원두·#태그 검색">
         <select id="sort">
@@ -186,14 +282,10 @@
           <option value="saves">저장순</option>
         </select>
       </div>
-      <div class="list-wrap">
-        <div class="list-main">
-          <ul id="recipes"></ul>
-          <p class="empty hidden" id="empty">아직 등록된 레시피가 없습니다.</p>
-        </div>
-        <!-- 홈에서만 붙는 이번 달 인기 레시피. 내용은 JS가 통째로 그린다 -->
-        <aside id="popular" class="hidden"></aside>
-      </div>
+      <ul id="recipes"></ul>
+      <p class="empty hidden" id="empty">아직 등록된 레시피가 없습니다.</p>
+      <!-- 무한 스크롤 표식. 이게 화면에 들어오면 다음 페이지를 부른다 -->
+      <div id="sentinel"></div>
     </section>
 
     <!-- 내용은 #recipe/{id} 라우트에서 통째로 그린다 -->
@@ -204,29 +296,34 @@
 
     <section id="view-new" class="hidden">
       <form id="recipe-form">
-        <label>제목 <input name="title" maxlength="100" placeholder="에티오피아 아침" required></label>
-        <label>원두명 <input name="beanName" maxlength="100" placeholder="예가체프" required></label>
+        <p class="form-hint"><b>*</b> 표시는 반드시 입력해야 합니다.</p>
         <div class="row">
-          <label>로스터 <input name="roaster" maxlength="100"></label>
-          <label>원산지 <input name="origin" maxlength="100"></label>
+          <label class="wide"><span>제목</span><input name="title" maxlength="100" placeholder="에티오피아 아침" required></label>
+          <label><span>핫/아이스</span><select name="serveType" required>
+            <option value="HOT">🔥 핫</option>
+            <option value="ICE">🧊 아이스</option>
+          </select></label>
         </div>
         <div class="row">
-          <label>로스팅 정도 <input name="roastLevel" maxlength="50" placeholder="라이트"></label>
-          <label>분쇄도 <input name="grindSize" maxlength="50" placeholder="EK43 8.5"></label>
+          <label><span>원두명</span><input name="beanName" maxlength="100" placeholder="예가체프" required></label>
+          <label><span>원산지</span><input name="origin" maxlength="100" required></label>
         </div>
+        <label><span>원두 구입 링크</span><input type="url" name="purchaseUrl" maxlength="500" placeholder="https://... (원두 판매처)"></label>
+        <label><span>드리퍼</span><input name="dripper" list="drippers" maxlength="50" placeholder="V60" required></label>
+        <datalist id="drippers"></datalist>
         <div class="row">
-          <label>드리퍼 <select name="brewMethod" required></select></label>
-          <label>그라인더 <input name="grinder" list="grinders" maxlength="50" placeholder="코만단테 C40"></label>
+          <label><span>그라인더</span><input name="grinder" list="grinders" maxlength="50" placeholder="코만단테 C40"></label>
+          <label><span>분쇄도</span><input name="grindSize" maxlength="50" placeholder="EK43 8.5"></label>
         </div>
         <datalist id="grinders"></datalist>
         <div class="row">
-          <label>커피(g) <input type="number" name="coffeeAmount" min="1" max="500" value="20" required></label>
-          <label>물(g) <input type="number" name="waterAmount" min="1" max="5000" value="320" required></label>
-          <label>온도(℃) <input type="number" name="waterTemp" min="1" max="100" value="93" required></label>
+          <label><span>커피(g)</span><input type="number" name="coffeeAmount" min="1" max="500" value="20" required></label>
+          <label><span>물(g)</span><input type="number" name="waterAmount" min="1" max="5000" value="320" required></label>
+          <label><span>온도(℃)</span><input type="number" name="waterTemp" min="1" max="100" value="93" required></label>
         </div>
 
 
-        <label>상세 설명 <textarea name="description" maxlength="2000" placeholder="레시피 설명이나 맛 노트. #으로 태그를 달 수 있어요 (#에티오피아 #플로럴)"></textarea></label>
+        <label><span>상세 설명</span><textarea name="description" maxlength="2000" placeholder="레시피 설명이나 맛 노트. #으로 태그를 달 수 있어요 (#에티오피아 #플로럴)"></textarea></label>
 
         <h2>푸어 단계</h2>
         <div id="steps"></div>
@@ -240,7 +337,7 @@
     <section id="view-me" class="profile hidden">
       <p><strong id="nickname"></strong>님<br><span class="provider" id="provider"></span></p>
       <form id="profile-form">
-        <label>닉네임 <input name="nickname" maxlength="30" required></label>
+        <label><span>닉네임</span><input name="nickname" maxlength="30" required></label>
         <p class="error hidden" id="profile-error"></p>
         <button type="submit" class="btn-primary">회원 정보 저장</button>
       </form>
@@ -254,7 +351,9 @@
 <nav>
   <a href="#home" data-tab="home"><span class="icon">☕</span>홈</a>
   <a href="#new" data-tab="new"><span class="icon">➕</span>등록</a>
-  <a href="#mine" data-tab="mine"><span class="icon">★</span>저장한 레시피</a>
+  <a href="#mine" data-tab="mine"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path
+    d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"
+    fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>저장한 레시피</a>
   <a href="#me" data-tab="me"><span class="icon">👤</span>마이</a>
 </nav>
 

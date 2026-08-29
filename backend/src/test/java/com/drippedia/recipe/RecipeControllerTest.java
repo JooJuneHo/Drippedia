@@ -12,6 +12,7 @@ import com.drippedia.domain.user.UserRepository;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -50,7 +51,7 @@ class RecipeControllerTest {
 
     private String body(String steps) {
         return """
-                {"title":"에티오피아 아침","beanName":"예가체프","roaster":"프릳츠","brewMethod":"V60",
+                {"title":"에티오피아 아침","beanName":"예가체프","origin":"에티오피아","purchaseUrl":"https://shop.example.com/yirga","dripper":"V60","serveType":"HOT",
                  "coffeeAmount":20,"waterAmount":320,"waterTemp":93,"steps":%s}
                 """.formatted(steps);
     }
@@ -66,7 +67,7 @@ class RecipeControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body(steps)))
                 .andExpect(status().isCreated());
 
-        Recipe saved = recipeRepository.search(null, USER_ID, null, null).getFirst();
+        Recipe saved = recipeRepository.search(null, USER_ID, null, null, "", Pageable.unpaged()).getFirst();
         assertThat(saved.getTitle()).isEqualTo("에티오피아 아침");
         assertThat(pourStepRepository.findByRecipeIdOrderByStepOrderAsc(saved.getId()))
                 .extracting(PourStep::getStepOrder, PourStep::getPourAmount)
@@ -78,7 +79,7 @@ class RecipeControllerTest {
         User author = userRepository.save(User.builder()
                 .provider(AuthProvider.GOOGLE).providerId("other-user").nickname("옆자리바리스타").build());
         recipeRepository.save(Recipe.builder()
-                .authorId(author.getId()).title("남의 레시피").beanName("케냐").brewMethod("V60")
+                .authorId(author.getId()).title("남의 레시피").beanName("케냐").dripper("V60")
                 .coffeeAmount(20).waterAmount(320).waterTemp(93).build());
 
         mockMvc.perform(get("/api/recipes"))
@@ -96,12 +97,12 @@ class RecipeControllerTest {
         mockMvc.perform(post("/api/recipes").with(loggedIn()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content(body(steps)))
                 .andExpect(status().isCreated());
-        Long id = recipeRepository.search(null, USER_ID, null, null).getFirst().getId();
+        Long id = recipeRepository.search(null, USER_ID, null, null, "", Pageable.unpaged()).getFirst().getId();
 
         mockMvc.perform(get("/api/recipes/" + id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("에티오피아 아침"))
-                .andExpect(jsonPath("$.roaster").value("프릳츠"))
+                .andExpect(jsonPath("$.purchaseUrl").value("https://shop.example.com/yirga"))
                 .andExpect(jsonPath("$.steps.length()").value(3))
                 .andExpect(jsonPath("$.steps[0].stepOrder").value(1))
                 .andExpect(jsonPath("$.steps[0].note").value("뜸"))
@@ -119,7 +120,7 @@ class RecipeControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body("[]")))
                 .andExpect(status().isBadRequest());
 
-        assertThat(recipeRepository.search(null, USER_ID, null, null)).isEmpty();
+        assertThat(recipeRepository.search(null, USER_ID, null, null, "", Pageable.unpaged())).isEmpty();
     }
 
     @Test
@@ -128,6 +129,26 @@ class RecipeControllerTest {
 
         mockMvc.perform(post("/api/recipes").with(loggedIn()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content(tooHot))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void 핫도_아이스도_아니면_400() throws Exception {
+        String wrong = body(ONE_STEP).replace("\"serveType\":\"HOT\"", "\"serveType\":\"미지근\"");
+
+        mockMvc.perform(post("/api/recipes").with(loggedIn()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(wrong))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** 상세 화면에서 링크로 걸리는 값이라 http/https가 아니면 아예 못 들어오게 막는다. */
+    @Test
+    void 구입_링크가_http가_아니면_400() throws Exception {
+        String script = body(ONE_STEP)
+                .replace("\"https://shop.example.com/yirga\"", "\"javascript:alert(1)\"");
+
+        mockMvc.perform(post("/api/recipes").with(loggedIn()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(script))
                 .andExpect(status().isBadRequest());
     }
 
@@ -147,7 +168,7 @@ class RecipeControllerTest {
     /** 남이 올린 레시피 하나. 저장/권한 테스트가 다 이걸 쓴다. */
     private Recipe othersRecipe() {
         return recipeRepository.save(Recipe.builder()
-                .authorId(1234L).title("남의 레시피").beanName("케냐").brewMethod("V60")
+                .authorId(1234L).title("남의 레시피").beanName("케냐").dripper("V60")
                 .coffeeAmount(20).waterAmount(320).waterTemp(93).build());
     }
 
@@ -185,7 +206,7 @@ class RecipeControllerTest {
         mockMvc.perform(post("/api/recipes").with(loggedIn()).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content(body(ONE_STEP)))
                 .andExpect(status().isCreated());
-        Long id = recipeRepository.search(null, USER_ID, null, null).getFirst().getId();
+        Long id = recipeRepository.search(null, USER_ID, null, null, "", Pageable.unpaged()).getFirst().getId();
 
         String steps = """
                 [{"startTimeSeconds":0,"pourAmount":40},{"startTimeSeconds":30,"pourAmount":200}]""";
@@ -236,7 +257,7 @@ class RecipeControllerTest {
     @Test
     void 태그는_줄바꿈에서_끊기고_링크는_태그가_아니다() throws Exception {
         String body = """
-                {"title":"에티오피아 아침","beanName":"예가체프","brewMethod":"V60",
+                {"title":"에티오피아 아침","beanName":"예가체프","origin":"에티오피아","dripper":"V60","serveType":"HOT",
                  "description":"#산미\\nhttps://ex.com/a#t=30 참고",
                  "coffeeAmount":20,"waterAmount":320,"waterTemp":93,"steps":%s}
                 """.formatted(ONE_STEP);

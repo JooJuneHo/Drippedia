@@ -5,6 +5,7 @@ import com.drippedia.domain.pourstep.PourStep;
 import com.drippedia.domain.pourstep.PourStepRepository;
 import com.drippedia.domain.recipe.Recipe;
 import com.drippedia.domain.recipe.RecipeRepository;
+import com.drippedia.domain.recipe.RecipeCommentRepository;
 import com.drippedia.domain.recipe.RecipeLike;
 import com.drippedia.domain.recipe.RecipeLikeRepository;
 import com.drippedia.domain.recipe.RecipeSave;
@@ -15,6 +16,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +27,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.regex.MatchResult;
 import java.util.List;
-import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -41,6 +42,7 @@ public class RecipeController {
     private final PourStepRepository pourStepRepository;
     private final RecipeSaveRepository recipeSaveRepository;
     private final RecipeLikeRepository recipeLikeRepository;
+    private final RecipeCommentRepository recipeCommentRepository;
     private final UserRepository userRepository;
 
     /** 사용자를 못 찾았을 때 목록/상세가 통째로 깨지는 것보단 이렇게 표시하는 게 낫다. */
@@ -49,36 +51,43 @@ public class RecipeController {
     /** 홈에 보여줄 인기 레시피 개수. */
     private static final int POPULAR_SIZE = 3;
 
+    /** 목록 한 페이지 크기. 무한 스크롤이 이 단위로 이어 붙인다. */
+    private static final int PAGE_SIZE = 20;
+
     /**
      * 상세 설명에 섞여 있는 #태그. 목록 카드는 이것만 보여준다.
      * 공백/줄바꿈에서 끊고, 앞에 글자가 붙어 있으면(링크 뒤의 #조각 등) 태그로 안 친다.
      */
     private static final java.util.regex.Pattern TAG = java.util.regex.Pattern.compile("(?<!\\S)#[^\\s#]+");
 
-    /** 메인 화면 목록(최신순). brewMethod를 주면 그 도구만 거른다. 로그인 없이도 볼 수 있다. */
+    /** 메인 화면 목록. dripper를 주면 그 도구만 거른다. 로그인 없이도 볼 수 있다.
+     *  무한 스크롤이라 page를 0부터 하나씩 올려 가며 부른다(한 번에 PAGE_SIZE개). */
     @GetMapping
-    public List<Summary> list(@RequestParam(required = false) String brewMethod,
+    public List<Summary> list(@RequestParam(required = false) String dripper,
                               @RequestParam(required = false) String q,
-                              @RequestParam(required = false) String sort) {
-        return sorted(summaries(recipeRepository.search(brewMethod, null, null, like(q))), sort);
+                              @RequestParam(required = false) String sort,
+                              @RequestParam(defaultValue = "0") int page) {
+        return summaries(recipeRepository.search(dripper, null, null, like(q), sort(sort), pageOf(page)));
     }
 
     /** 내가 등록한 것만. 이 경로만 SecurityConfig에서 authenticated로 잡아 뒀다(아니면 userId가 null). */
     @GetMapping("/mine")
     public List<Summary> mine(@CurrentUserId Long userId,
-                              @RequestParam(required = false) String brewMethod,
+                              @RequestParam(required = false) String dripper,
                               @RequestParam(required = false) String q,
-                              @RequestParam(required = false) String sort) {
-        return sorted(summaries(recipeRepository.search(brewMethod, userId, null, like(q))), sort);
+                              @RequestParam(required = false) String sort,
+                              @RequestParam(defaultValue = "0") int page) {
+        return summaries(recipeRepository.search(dripper, userId, null, like(q), sort(sort), pageOf(page)));
     }
 
     /** 내가 저장(북마크)한 것만. /mine과 같은 이유로 authenticated. */
     @GetMapping("/saved")
     public List<Summary> saved(@CurrentUserId Long userId,
-                               @RequestParam(required = false) String brewMethod,
+                               @RequestParam(required = false) String dripper,
                                @RequestParam(required = false) String q,
-                               @RequestParam(required = false) String sort) {
-        return sorted(summaries(recipeRepository.search(brewMethod, null, userId, like(q))), sort);
+                               @RequestParam(required = false) String sort,
+                               @RequestParam(defaultValue = "0") int page) {
+        return summaries(recipeRepository.search(dripper, null, userId, like(q), sort(sort), pageOf(page)));
     }
 
     /**
@@ -125,10 +134,10 @@ public class RecipeController {
                 .authorId(userId)
                 .title(request.title())
                 .beanName(request.beanName())
-                .roaster(request.roaster())
+                .purchaseUrl(request.purchaseUrl())
                 .origin(request.origin())
-                .roastLevel(request.roastLevel())
-                .brewMethod(request.brewMethod())
+                .dripper(request.dripper())
+                .serveType(request.serveType())
                 .coffeeAmount(request.coffeeAmount())
                 .waterAmount(request.waterAmount())
                 .waterTemp(request.waterTemp())
@@ -147,8 +156,8 @@ public class RecipeController {
     @Transactional
     public Summary update(@CurrentUserId Long userId, @PathVariable Long id, @Valid @RequestBody Form request) {
         Recipe recipe = mustOwn(id, userId);
-        recipe.update(request.title(), request.beanName(), request.roaster(), request.origin(),
-                request.roastLevel(), request.brewMethod(), request.coffeeAmount(), request.waterAmount(),
+        recipe.update(request.title(), request.beanName(), request.purchaseUrl(), request.origin(),
+                request.dripper(), request.serveType(), request.coffeeAmount(), request.waterAmount(),
                 request.waterTemp(), request.grindSize(), request.grinder(), request.description());
 
         pourStepRepository.deleteByRecipeId(id);
@@ -165,6 +174,7 @@ public class RecipeController {
         pourStepRepository.deleteByRecipeId(id);
         recipeSaveRepository.deleteByRecipeId(id);
         recipeLikeRepository.deleteByRecipeId(id);
+        recipeCommentRepository.deleteByRecipeId(id);
         recipeRepository.deleteById(id);
 
         return ResponseEntity.noContent().build();
@@ -262,19 +272,14 @@ public class RecipeController {
         return rows.stream().collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
     }
 
-    /**
-     * 정렬. 좋아요/저장 수는 목록을 만들면서 이미 세어 뒀으니 그걸로 다시 세운다.
-     * 같은 수끼리는 정렬이 안정적이라 쿼리가 준 최신순이 그대로 유지된다.
-     * ponytail: 목록을 통째로 읽어 오는 구조라 메모리 정렬. 페이징이 붙으면 그때 쿼리 order by로.
-     */
-    private List<Summary> sorted(List<Summary> summaries, String sort) {
-        Comparator<Summary> by = switch (sort == null ? "" : sort) {
-            case "popular" -> Comparator.comparingLong(Summary::likes).reversed();
-            case "saves" -> Comparator.comparingLong(Summary::saves).reversed();
-            default -> null; // 최신순은 쿼리가 이미 맞춰 준다
-        };
+    /** 아는 정렬만 쿼리로 넘긴다. 이상한 값이 오면 최신순. */
+    private String sort(String sort) {
+        return "popular".equals(sort) || "saves".equals(sort) ? sort : "";
+    }
 
-        return by == null ? summaries : summaries.stream().sorted(by).toList();
+    /** 음수 페이지로 터지지 않게만 막는다. 크기는 서버가 정한다. */
+    private Pageable pageOf(int page) {
+        return PageRequest.of(Math.max(page, 0), PAGE_SIZE);
     }
 
     /** 빈 검색어는 조건 자체를 끄고, 아니면 대소문자 구분 없는 부분 일치로 만든다. */
@@ -290,10 +295,11 @@ public class RecipeController {
     public record Form(
             @NotBlank @Size(max = 100) String title,
             @NotBlank @Size(max = 100) String beanName,
-            @Size(max = 100) String roaster,
-            @Size(max = 100) String origin,
-            @Size(max = 50) String roastLevel,
-            @NotBlank @Size(max = 50) String brewMethod,
+            @Size(max = 500) @Pattern(regexp = "https?://.+", message = "http로 시작하는 주소만 넣을 수 있습니다.")
+            String purchaseUrl,
+            @NotBlank @Size(max = 100) String origin,
+            @NotBlank @Size(max = 50) String dripper,
+            @NotBlank @Pattern(regexp = "HOT|ICE", message = "핫 또는 아이스만 고를 수 있습니다.") String serveType,
             @NotNull @Positive @Max(500) Integer coffeeAmount,
             @NotNull @Positive @Max(5000) Integer waterAmount,
             @NotNull @Min(1) @Max(100) Integer waterTemp,
@@ -316,16 +322,16 @@ public class RecipeController {
         }
     }
 
-    /** 상세 화면용. 목록 카드에 없는 원산지/로스팅 정도/분쇄도와 푸어 단계까지 다 내려준다. */
-    public record Detail(Long id, String title, String beanName, String roaster, String origin,
-                         String roastLevel, String brewMethod, int coffeeAmount, int waterAmount,
+    /** 상세 화면용. 목록 카드에 없는 원산지·분쇄도와 푸어 단계까지 다 내려준다. */
+    public record Detail(Long id, String title, String beanName, String purchaseUrl, String origin,
+                         String dripper, String serveType, int coffeeAmount, int waterAmount,
                          int waterTemp, double ratio, String grindSize, String grinder, String description, String author,
                          LocalDateTime createdAt, List<StepView> steps,
                          boolean saved, long saves, boolean liked, long likes, boolean mine) {
         static Detail from(Recipe r, String author, List<StepView> steps,
                            boolean saved, long saves, boolean liked, long likes, boolean mine) {
-            return new Detail(r.getId(), r.getTitle(), r.getBeanName(), r.getRoaster(), r.getOrigin(),
-                    r.getRoastLevel(), r.getBrewMethod(), r.getCoffeeAmount(), r.getWaterAmount(),
+            return new Detail(r.getId(), r.getTitle(), r.getBeanName(), r.getPurchaseUrl(), r.getOrigin(),
+                    r.getDripper(), r.getServeType(), r.getCoffeeAmount(), r.getWaterAmount(),
                     r.getWaterTemp(), r.ratio(), r.getGrindSize(), r.getGrinder(), r.getDescription(), author,
                     r.getCreatedAt(), steps, saved, saves, liked, likes, mine);
         }
@@ -344,12 +350,12 @@ public class RecipeController {
     }
 
     /** 목록 카드에 필요한 만큼만. 상세(PourStep 포함)는 상세 API에서. */
-    public record Summary(Long id, String title, String beanName, String roaster, String brewMethod,
+    public record Summary(Long id, String title, String beanName, String dripper, String serveType,
                           int coffeeAmount, int waterAmount, int waterTemp, double ratio,
                           String author, LocalDateTime createdAt, List<String> tags, long likes, long saves) {
         static Summary from(Recipe r, String author, long likes, long saves) {
-            return new Summary(r.getId(), r.getTitle(), r.getBeanName(), r.getRoaster(),
-                    r.getBrewMethod(), r.getCoffeeAmount(), r.getWaterAmount(),
+            return new Summary(r.getId(), r.getTitle(), r.getBeanName(),
+                    r.getDripper(), r.getServeType(), r.getCoffeeAmount(), r.getWaterAmount(),
                     r.getWaterTemp(), r.ratio(), author, r.getCreatedAt(), tagsOf(r.getDescription()),
                     likes, saves);
         }
