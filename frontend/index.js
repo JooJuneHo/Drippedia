@@ -16,6 +16,14 @@ const GRINDERS = [
 // 핫/아이스. 목록 카드와 상세가 같은 표기를 쓴다.
 const SERVES = { HOT: '🔥 핫', ICE: '🧊 아이스' };
 
+// 목록 한 페이지 크기. 서버(RecipeController.PAGE_SIZE)와 같아야 "마지막 페이지"를 알아본다.
+const PAGE_SIZE = 20;
+
+// 저장 아이콘. 이모지·문자 아이콘은 색을 못 바꿔서 SVG로 그리고 색은 CSS(currentColor)에 맡긴다.
+const bookmark = filled => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path
+  d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"
+  fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`;
+
 const TABS = {
   home: { title: '전체 레시피', view: 'view-list', path: '' },
   new: { title: '레시피 등록', view: 'view-new' },
@@ -107,18 +115,52 @@ function show(view, title, tab) {
   document.querySelectorAll('nav a').forEach(a => a.classList.toggle('on', a.dataset.tab === navTab));
 }
 
-async function loadRecipes(path) {
-  const params = new URLSearchParams();
+// 무한 스크롤 상태. 화면(경로)·검색어·정렬이 바뀌면 통째로 다시 시작한다.
+const feed = { path: '', page: 0, done: true, loading: false }; // done: 목록 화면에 들어오기 전엔 안 받는다
+
+function loadRecipes(path) {
+  Object.assign(feed, { path, page: 0, done: false, loading: false });
+  $('recipes').innerHTML = '';
+  $('empty').textContent = $('q').value.trim() ? '검색 결과가 없습니다.'
+    : path === '/saved' ? '저장한 레시피가 없습니다.' : '아직 등록된 레시피가 없습니다.';
+  return loadMore();
+}
+
+/** 다음 페이지를 받아 목록 끝에 이어 붙인다. 서버가 한 페이지보다 적게 주면 거기서 끝. */
+async function loadMore() {
+  if (feed.loading || feed.done) {
+    return;
+  }
+  feed.loading = true;
+
+  const params = new URLSearchParams({ page: feed.page });
   if ($('q').value.trim()) params.set('q', $('q').value.trim());
   if ($('sort').value) params.set('sort', $('sort').value);
 
-  const query = params.toString();
-  const res = await fetch(`${API}/api/recipes${path}${query ? `?${query}` : ''}`, { credentials: 'include' });
+  const res = await fetch(`${API}/api/recipes${feed.path}?${params}`, { credentials: 'include' });
+  const recipes = res.ok ? await res.json() : [];
 
-  $('empty').textContent = params.has('q') ? '검색 결과가 없습니다.'
-    : path === '/saved' ? '저장한 레시피가 없습니다.' : '아직 등록된 레시피가 없습니다.';
-  render(res.ok ? await res.json() : []);
+  $('recipes').insertAdjacentHTML('beforeend', cards(recipes));
+  $('empty').classList.toggle('hidden', $('recipes').children.length > 0);
+
+  feed.done = recipes.length < PAGE_SIZE;
+  feed.page += 1;
+  feed.loading = false;
+
+  // 첫 페이지가 화면을 다 못 채우면 스크롤이 안 생겨 다음 요청이 영영 안 온다.
+  if (!feed.done && sentinelVisible()) {
+    loadMore();
+  }
 }
+
+const sentinelVisible = () => $('sentinel').getBoundingClientRect().top < window.innerHeight;
+
+// 목록 끝의 빈 표식이 화면에 들어오면 다음 페이지를 부른다.
+new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting && !$('view-list').classList.contains('hidden')) {
+    loadMore();
+  }
+}).observe($('sentinel'));
 
 /**
  * 이번 달 좋아요가 많은 세 개. 목록·검색과는 무관하게 홈에서 한 번만 받아온다.
@@ -134,21 +176,21 @@ async function loadPopular(show) {
   const top = res.ok ? await res.json() : [];
   $('popular').classList.toggle('hidden', top.length === 0);
   $('popular').innerHTML = `
-    <h2>이번 달 인기</h2>
+    <h2>이번 달 인기 레시피!</h2>
     <ol>${top.map((r, i) => `
       <li>
         <a href="#recipe/${r.id}">
-          <span class="rank">${i + 1}</span>
+          <span class="rank r${i + 1}">${i + 1}</span>
           <span class="name">${esc(r.title)}</span>
-          <span class="likes">♥${r.likes}</span>
+          <span class="likes">♥ ${r.likes}</span>
         </a>
       </li>`).join('')}
     </ol>`;
 }
 
-function render(recipes) {
-  // 제목/원두명은 사용자 입력이라 innerHTML에 넣기 전에 반드시 이스케이프한다.
-  $('recipes').innerHTML = recipes.map(r => `
+// 카드 한 묶음. 첫 페이지는 갈아 끼우고 다음 페이지부터는 뒤에 붙인다.
+// 제목·원두명은 사용자 입력이라 innerHTML에 넣기 전에 반드시 이스케이프한다.
+const cards = recipes => recipes.map(r => `
     <li class="card">
       <a href="#recipe/${r.id}">
         <h2>${esc(r.title)}${SERVES[r.serveType] ? `<span class="serve ${r.serveType.toLowerCase()}">${SERVES[r.serveType]}</span>` : ''}</h2>
@@ -161,12 +203,14 @@ function render(recipes) {
             <span class="fig"><em>물</em>${r.waterAmount}g</span>
             <span class="fig"><em>온도</em>${r.waterTemp}℃</span>
           </span>
-          <span class="by">♥${r.likes ?? 0} ★${r.saves ?? 0} · ${esc(r.author)}</span>
+          <span class="by">
+            <span class="heart">♥ ${r.likes ?? 0}</span>
+            <span class="mark">${bookmark(true)} ${r.saves ?? 0}</span>
+            · ${esc(r.author)}
+          </span>
         </div>
       </a>
     </li>`).join('');
-  $('empty').classList.toggle('hidden', recipes.length > 0);
-}
 
 const fetchRecipe = id => fetch(`${API}/api/recipes/${encodeURIComponent(id)}`, { credentials: 'include' })
   .then(res => res.ok ? res.json() : null);
@@ -203,7 +247,7 @@ function stepState(steps, i, ms) {
 }
 
 function renderTimer(r) {
-  $('title').textContent = `${r.title} 타이머`;
+  $('title').textContent = ''; // 제목은 아래 카드 안에서 그린다(상세와 같은 모양)
 
   // 부으면서 필요한 건 "이번에 몇 g"보다 "저울이 몇 g이어야 하나"라서 누적량을 같이 들고 간다.
   let poured = 0;
@@ -212,6 +256,7 @@ function renderTimer(r) {
   $('view-timer').innerHTML = `
     <a class="back" href="#recipe/${r.id}">← 레시피로</a>
     <div class="detail">
+      <h1 class="page-title">${esc(r.title)} 타이머</h1>
       <p class="method">원두 : ${r.coffeeAmount}g / 물 : ${r.waterAmount}g / 물 온도 : ${r.waterTemp}℃</p>
 
       <p class="clock" id="clock">0:00</p>
@@ -302,16 +347,16 @@ const stepsList = r => `<ol>${r.steps.map(s => `
   </li>`).join('')}</ol>`;
 
 function renderDetail(r) {
-  $('title').textContent = r.title;
+  $('title').textContent = ''; // 상세는 '목록으로' 아래에 제목을 직접 그린다(빈 h1은 CSS가 접는다)
 
   // 값이 없는 항목은 줄 자체를 안 그린다(원산지/분쇄도는 선택 입력).
   const rows = [
+    ['핫/아이스', SERVES[r.serveType]],
     ['원두', r.beanName],
     ['원산지', r.origin],
     ['비율', `1:${r.ratio.toFixed(1)} (${r.coffeeAmount}g / ${r.waterAmount}g)`],
     ['물 온도', `${r.waterTemp}℃`],
     ['드리퍼', DRIPPERS[r.dripper] ?? r.dripper],
-    ['핫/아이스', SERVES[r.serveType]],
     ['그라인더', r.grinder],
     ['분쇄도', r.grindSize]
   ].filter(([, value]) => value);
@@ -319,6 +364,7 @@ function renderDetail(r) {
   $('view-detail').innerHTML = `
     ${backLink()}
     <div class="detail">
+      <h1 class="page-title">${esc(r.title)}</h1>
       <p class="by">${esc(r.author)} · ${esc(r.createdAt.slice(0, 10).replaceAll('-', '.'))}</p>
       <dl>${rows.map(([label, value]) => `<dt>${label}</dt><dd>${esc(value)}</dd>`).join('')}</dl>
       ${/^https?:\/\//.test(r.purchaseUrl ?? '') ? `<p class="buy"><a href="${esc(r.purchaseUrl)}" target="_blank" rel="noopener noreferrer">🛒 원두 구입 링크</a></p>` : ''}
@@ -331,8 +377,8 @@ function renderDetail(r) {
       <a class="timer" href="#timer/${r.id}">▶ 이 레시피로 브루잉 시작</a>
 
       <div class="actions">
-        <button type="button" id="like-toggle" class="${r.liked ? 'on' : ''}">${r.liked ? '♥' : '♡'} 좋아요 ${r.likes ?? 0}</button>
-        <button type="button" id="save-toggle" class="${r.saved ? 'on' : ''}">${r.saved ? '★' : '☆'} 저장 ${r.saves ?? 0}</button>
+        <button type="button" id="like-toggle" class="like ${r.liked ? 'on' : ''}">${r.liked ? '♥' : '♡'} 좋아요 ${r.likes ?? 0}</button>
+        <button type="button" id="save-toggle" class="save ${r.saved ? 'on' : ''}">${bookmark(r.saved)} 저장 ${r.saves ?? 0}</button>
         ${r.mine ? `<a href="#edit/${r.id}">수정</a>
         <button type="button" id="delete-recipe" class="danger">삭제</button>` : ''}
       </div>
