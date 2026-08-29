@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
@@ -37,6 +38,8 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
                         // 레시피 구경은 로그인 없이도 가능, 쓰는 건 로그인 필요
+                        // 내 레시피만 예외. permitAll이면 익명 요청이 그대로 들어와 userId가 비어버린다
+                        .requestMatchers(HttpMethod.GET, "/api/recipes/mine", "/api/recipes/saved").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/recipes/**").permitAll()
                         .requestMatchers("/error", "/login/**", "/oauth2/**").permitAll()
                         .anyRequest().authenticated()
@@ -51,7 +54,10 @@ public class SecurityConfig {
                         // 로그인은 백엔드 오리진에서 일어나므로 끝나면 프론트로 돌려보내야 한다
                         .defaultSuccessUrl(frontendUrl, true)
                 )
-                .logout(logout -> logout.logoutSuccessUrl(frontendUrl))
+                // fetch로 부르는 엔드포인트라 리다이렉트를 주면 안 된다.
+                // 302 대상(프론트 정적 페이지)에는 CORS 헤더가 없어서 fetch가 터지고, 뒤따르는 화면 전환이 통째로 날아간다.
+                .logout(logout -> logout.logoutSuccessHandler(
+                        new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))
                 // 로그인 안 된 API 호출은 로그인 페이지로 리다이렉트하지 말고 401을 준다
                 .exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor(
                         new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),

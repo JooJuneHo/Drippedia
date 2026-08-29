@@ -34,9 +34,8 @@ public class Recipe {
     private String origin;
     private String roastLevel;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private BrewMethod brewMethod;
+    @Column(nullable = false, length = 50)
+    private String brewMethod;
 
     @Column(nullable = false)
     private Integer coffeeAmount; // 단위: g
@@ -48,6 +47,8 @@ public class Recipe {
     private Integer waterTemp; // 단위: 섭씨
 
     private String grindSize;
+
+    private String grinder;
 
     private Integer totalBrewTimeSeconds;
 
@@ -65,8 +66,8 @@ public class Recipe {
 
     @Builder
     public Recipe(Long authorId, String title, String beanName, String roaster, String origin,
-                  String roastLevel, BrewMethod brewMethod, Integer coffeeAmount, Integer waterAmount,
-                  Integer waterTemp, String grindSize, Integer totalBrewTimeSeconds,
+                  String roastLevel, String brewMethod, Integer coffeeAmount, Integer waterAmount,
+                  Integer waterTemp, String grindSize, String grinder, Integer totalBrewTimeSeconds,
                   String description, String tastingNote) {
         this.authorId = authorId;
         this.title = title;
@@ -79,9 +80,28 @@ public class Recipe {
         this.waterAmount = waterAmount;
         this.waterTemp = waterTemp;
         this.grindSize = grindSize;
+        this.grinder = grinder;
         this.totalBrewTimeSeconds = totalBrewTimeSeconds;
         this.description = description;
         this.tastingNote = tastingNote;
+    }
+
+    /** 수정 화면에서 받은 값으로 통째로 덮어쓴다. authorId/createdAt은 손대지 않는다. */
+    public void update(String title, String beanName, String roaster, String origin, String roastLevel,
+                       String brewMethod, Integer coffeeAmount, Integer waterAmount, Integer waterTemp,
+                       String grindSize, String grinder, String description) {
+        this.title = title;
+        this.beanName = beanName;
+        this.roaster = roaster;
+        this.origin = origin;
+        this.roastLevel = roastLevel;
+        this.brewMethod = brewMethod;
+        this.coffeeAmount = coffeeAmount;
+        this.waterAmount = waterAmount;
+        this.waterTemp = waterTemp;
+        this.grindSize = grindSize;
+        this.grinder = grinder;
+        this.description = description;
     }
 
     @PrePersist
