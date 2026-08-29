@@ -1,6 +1,6 @@
 // 저장된 키(옛 enum 값)를 화면용 이름으로 바꾼다. 등록 폼 datalist의 추천 목록이기도 하다.
 // ponytail: 목록을 API로 내려주지 않고 하드코딩. 도구가 자주 바뀌면 그때 엔드포인트로.
-const METHODS = {
+const DRIPPERS = {
   V60: 'V60', KALITA_WAVE: '칼리타 웨이브', ORIGAMI: '오리가미',
   CHEMEX: '케멕스', CLEVER: '클레버', APRIL: '에이프릴'
 };
@@ -12,6 +12,9 @@ const GRINDERS = [
   '타임모어 C2', '타임모어 C3', '타임모어 078S', '바라짜 엔코어', '바라짜 버츄오소',
   '펠로우 오드 Gen2', '니체 제로', '말코닉 EK43', '말코닉 X54', 'DF64', '킨그라인더 K6'
 ];
+
+// 핫/아이스. 목록 카드와 상세가 같은 표기를 쓴다.
+const SERVES = { HOT: '🔥 핫', ICE: '🧊 아이스' };
 
 const TABS = {
   home: { title: '전체 레시피', view: 'view-list', path: '' },
@@ -37,11 +40,9 @@ fetchMe().then(me => {
   route();
 });
 
-const options = Object.entries(METHODS)
-  .map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+// 드리퍼·그라인더 모두 추천 목록을 주되 직접 입력도 받는다(datalist).
+$('drippers').innerHTML = Object.values(DRIPPERS).map(d => `<option value="${esc(d)}">`).join('');
 $('grinders').innerHTML = GRINDERS.map(g => `<option value="${esc(g)}">`).join('');
-
-document.querySelector('[name=brewMethod]').innerHTML = options; // 등록 폼: 하나는 반드시 고른다
 
 /**
  * 화면 전환은 해시로만 한다. 뒤로가기가 그냥 동작하고, 상태 변수를 따로 들 필요가 없다.
@@ -150,14 +151,16 @@ function render(recipes) {
   $('recipes').innerHTML = recipes.map(r => `
     <li class="card">
       <a href="#recipe/${r.id}">
-        <div class="top">
-          <h2>${esc(r.title)}</h2>
-          <span class="method">${esc(METHODS[r.brewMethod] ?? r.brewMethod)}</span>
-        </div>
-        <p class="bean">${esc([r.beanName, r.roaster].filter(Boolean).join(' · ')) || '원두 정보 없음'}</p>
+        <h2>${esc(r.title)}${SERVES[r.serveType] ? `<span class="serve ${r.serveType.toLowerCase()}">${SERVES[r.serveType]}</span>` : ''}</h2>
+        <p class="bean">${esc(r.beanName) || '원두 정보 없음'}</p>
       ${r.tags?.length ? `<p class="tags">${r.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</p>` : ''}
         <div class="bottom">
-          <span class="spec">1:${r.ratio.toFixed(1)} · ${r.coffeeAmount}g / ${r.waterAmount}g · ${r.waterTemp}℃</span>
+          <span class="spec">
+            <span class="fig"><em>비율</em>1:${r.ratio.toFixed(1)}</span>
+            <span class="fig"><em>원두</em>${r.coffeeAmount}g</span>
+            <span class="fig"><em>물</em>${r.waterAmount}g</span>
+            <span class="fig"><em>온도</em>${r.waterTemp}℃</span>
+          </span>
           <span class="by">♥${r.likes ?? 0} ★${r.saves ?? 0} · ${esc(r.author)}</span>
         </div>
       </a>
@@ -303,11 +306,12 @@ function renderDetail(r) {
 
   // 값이 없는 항목은 줄 자체를 안 그린다(원산지/분쇄도는 선택 입력).
   const rows = [
-    ['원두', [r.beanName, r.roaster].filter(Boolean).join(' · ')],
+    ['원두', r.beanName],
     ['원산지', r.origin],
-    ['로스팅', r.roastLevel],
     ['비율', `1:${r.ratio.toFixed(1)} (${r.coffeeAmount}g / ${r.waterAmount}g)`],
     ['물 온도', `${r.waterTemp}℃`],
+    ['드리퍼', DRIPPERS[r.dripper] ?? r.dripper],
+    ['핫/아이스', SERVES[r.serveType]],
     ['그라인더', r.grinder],
     ['분쇄도', r.grindSize]
   ].filter(([, value]) => value);
@@ -315,10 +319,11 @@ function renderDetail(r) {
   $('view-detail').innerHTML = `
     ${backLink()}
     <div class="detail">
-      <p class="method">${esc(METHODS[r.brewMethod] ?? r.brewMethod)}</p>
       <p class="by">${esc(r.author)} · ${esc(r.createdAt.slice(0, 10).replaceAll('-', '.'))}</p>
       <dl>${rows.map(([label, value]) => `<dt>${label}</dt><dd>${esc(value)}</dd>`).join('')}</dl>
-      ${r.description ? `<p class="desc">${formatted(esc(r.description))}</p>` : ''}
+      ${/^https?:\/\//.test(r.purchaseUrl ?? '') ? `<p class="buy"><a href="${esc(r.purchaseUrl)}" target="_blank" rel="noopener noreferrer">🛒 원두 구입 링크</a></p>` : ''}
+      ${r.description ? `<h2>상세 설명</h2>
+      <p class="desc">${formatted(esc(r.description))}</p>` : ''}
 
       <h2>푸어 단계</h2>
       ${stepsList(r)}
@@ -331,12 +336,122 @@ function renderDetail(r) {
         ${r.mine ? `<a href="#edit/${r.id}">수정</a>
         <button type="button" id="delete-recipe" class="danger">삭제</button>` : ''}
       </div>
+
+      <h2>댓글</h2>
+      <div id="comment-box" class="comments">
+        <div id="comments"></div>
+        ${commentForm()}
+      </div>
     </div>`;
 
   $('like-toggle').addEventListener('click', () => toggle(r.id, 'like', r.liked));
   $('save-toggle').addEventListener('click', () => toggle(r.id, 'save', r.saved));
   if (r.mine) {
     $('delete-recipe').addEventListener('click', () => removeRecipe(r.id));
+  }
+
+  // 댓글은 상세와 따로 받아온다. 좋아요처럼 글을 쓰고 나면 목록만 다시 그린다.
+  // 원댓글칸·답글칸이 계속 생겼다 없어져서 리스너는 매번 새로 그려지는 바깥 상자에 한 번만 건다.
+  $('comment-box').addEventListener('click', e => onCommentClick(e, r.id));
+  $('comment-box').addEventListener('submit', e => submitComment(e, r.id));
+  loadComments(r.id);
+}
+
+/** 원댓글 입력칸과 대댓글 입력칸이 같은 모양이라 한 군데서 만든다. parentId는 대댓글일 때만 붙는다. */
+const commentForm = (parentId = null) => `
+  <form class="comment-form"${parentId ? ` data-parent="${parentId}"` : ''}>
+    <textarea name="content" maxlength="500" required
+      placeholder="${parentId ? '답글을 남겨 보세요' : '댓글을 남겨 보세요'}"></textarea>
+    <button type="submit">${parentId ? '답글 등록' : '댓글 등록'}</button>
+  </form>`;
+
+async function loadComments(recipeId) {
+  const res = await fetch(`${API}/api/recipes/${recipeId}/comments`, { credentials: 'include' });
+  const comments = res.ok ? await res.json() : [];
+
+  $('comments').innerHTML = comments.length
+    ? comments.map(c => commentItem(c)).join('')
+    : '<p class="empty">첫 댓글을 남겨 보세요.</p>';
+}
+
+/** 대댓글은 replies에 담겨 오고 한 단계까지만이라, 답글 버튼도 원댓글에만 붙인다. */
+function commentItem(c, reply = false) {
+  return `
+    <div class="comment${reply ? ' reply' : ''}" data-id="${c.id}">
+      <p class="by">${esc(c.author)} · ${esc(c.createdAt.slice(0, 10).replaceAll('-', '.'))}</p>
+      <p class="text">${formatted(esc(c.content))}</p>
+      <p class="tools">
+        ${reply ? '' : '<button type="button" class="reply-open">답글</button>'}
+        ${c.mine ? `<button type="button" class="comment-edit">수정</button>
+        <button type="button" class="comment-delete danger">삭제</button>` : ''}
+      </p>
+      ${(c.replies ?? []).map(child => commentItem(child, true)).join('')}
+    </div>`;
+}
+
+function onCommentClick(e, recipeId) {
+  const box = e.target.closest('.comment');
+  if (!box) {
+    return;
+  }
+
+  if (e.target.classList.contains('reply-open')) {
+    const open = box.querySelector(':scope > .comment-form');
+    open ? open.remove() : box.insertAdjacentHTML('beforeend', commentForm(box.dataset.id));
+  }
+  if (e.target.classList.contains('comment-edit')) {
+    // 원문은 화면에 그대로 있으니 textContent로 되받는다(#태그·링크도 원래 글자로 돌아온다).
+    const text = box.querySelector(':scope > .text');
+    text.insertAdjacentHTML('afterend', editForm(box.dataset.id, text.textContent));
+    text.remove();
+  }
+  if (e.target.classList.contains('edit-cancel')) {
+    loadComments(recipeId); // 고치다 만 건 그냥 다시 받아서 되돌린다
+  }
+  if (e.target.classList.contains('comment-delete')) {
+    removeComment(recipeId, box.dataset.id);
+  }
+}
+
+/** 수정칸. 등록칸과 같은 comment-form이고, data-edit이 붙어 있으면 PUT으로 나간다. */
+const editForm = (id, content) => `
+  <form class="comment-form" data-edit="${id}">
+    <textarea name="content" maxlength="500" required>${esc(content)}</textarea>
+    <button type="submit">저장</button>
+    <button type="button" class="edit-cancel">취소</button>
+  </form>`;
+
+async function submitComment(e, recipeId) {
+  if (!e.target.classList.contains('comment-form')) {
+    return;
+  }
+  e.preventDefault();
+
+  const content = e.target.content.value.trim();
+  if (!content) {
+    return;
+  }
+
+  const editing = e.target.dataset.edit; // 있으면 수정, 없으면 새 댓글
+  const res = await send(`${API}/api/recipes/${recipeId}/comments${editing ? `/${editing}` : ''}`, {
+    method: editing ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, parentId: Number(e.target.dataset.parent) || null })
+  });
+
+  if (res) {
+    e.target.reset();
+    loadComments(recipeId); // 열려 있던 답글칸·수정칸은 같이 닫힌다
+  }
+}
+
+async function removeComment(recipeId, commentId) {
+  if (!confirm('이 댓글을 삭제할까요? 달린 답글도 같이 사라집니다.')) {
+    return;
+  }
+
+  if (await send(`${API}/api/recipes/${recipeId}/comments/${commentId}`, { method: 'DELETE' })) {
+    loadComments(recipeId);
   }
 }
 
@@ -345,19 +460,31 @@ function renderDetail(r) {
  * 개수는 서버가 세니 응답 뒤에 상세를 다시 받아온다 - 화면에서 숫자를 따로 굴리지 않는다.
  */
 async function toggle(id, kind, on) {
-  const res = await fetch(`${API}/api/recipes/${id}/${kind}`, {
-    method: on ? 'DELETE' : 'POST',
+  if (await send(`${API}/api/recipes/${id}/${kind}`, { method: on ? 'DELETE' : 'POST' })) {
+    loadDetail(id);
+  }
+}
+
+/**
+ * 쓰기 요청 한 군데. 401이면 로그인으로 보내고, 나머지 실패는 알려 준다.
+ * 버튼을 눌렀는데 아무 일도 안 일어나는 게 제일 나쁘다(서버가 옛 버전이면 이렇게 보인다).
+ */
+async function send(url, options) {
+  const res = await fetch(url, {
     credentials: 'include',
-    headers: csrfHeader()
+    ...options,
+    headers: { ...csrfHeader(), ...(options.headers ?? {}) }
   });
 
   if (res.status === 401) {
     location.replace('login.html');
-    return;
+    return null;
   }
-  if (res.ok) {
-    loadDetail(id);
+  if (!res.ok) {
+    alert(`처리하지 못했습니다. (${res.status})`);
+    return null;
   }
+  return res;
 }
 
 async function removeRecipe(id) {
@@ -365,24 +492,18 @@ async function removeRecipe(id) {
     return;
   }
 
-  const res = await fetch(`${API}/api/recipes/${id}`, {
-    method: 'DELETE', credentials: 'include', headers: csrfHeader()
-  });
-
-  if (res.status === 401) {
-    location.replace('login.html');
-    return;
+  if (await send(`${API}/api/recipes/${id}`, { method: 'DELETE' })) {
+    location.hash = '#manage';
   }
-  location.hash = '#manage';
 }
 
 // 푸어 단계는 개수가 정해져 있지 않아 행을 그때그때 붙인다. stepOrder는 서버가 배열 순서대로 매긴다.
 function addStep(startTimeSeconds = '', pourAmount = '', note = '') {
   $('steps').insertAdjacentHTML('beforeend', `
     <div class="step">
-      <label>시작(초) <input type="number" name="startTimeSeconds" min="0" max="3600" value="${startTimeSeconds}" required></label>
-      <label>붓는 양(g) <input type="number" name="pourAmount" min="1" max="5000" value="${pourAmount}" required></label>
-      <label class="note">메모 <input name="note" maxlength="100" placeholder="뜸들이기" value="${esc(note)}"></label>
+      <label><span>시작(초)</span><input type="number" name="startTimeSeconds" min="0" max="3600" value="${startTimeSeconds}" required></label>
+      <label><span>붓는 양(g)</span><input type="number" name="pourAmount" min="1" max="5000" value="${pourAmount}" required></label>
+      <label class="note"><span>메모</span><input name="note" maxlength="100" placeholder="뜸들이기" value="${esc(note)}"></label>
       <button type="button" class="remove" title="이 단계 삭제">×</button>
     </div>`);
 }
@@ -413,9 +534,12 @@ async function loadForEdit(id) {
 
   const r = await res.json();
   const form = $('recipe-form');
-  ['title', 'beanName', 'roaster', 'origin', 'roastLevel', 'brewMethod', 'coffeeAmount',
+  ['title', 'beanName', 'purchaseUrl', 'origin', 'dripper', 'serveType', 'coffeeAmount',
     'waterAmount', 'waterTemp', 'grindSize', 'grinder', 'description']
     .forEach(key => form.elements[key].value = r[key] ?? '');
+
+  // 예전 레시피는 드리퍼가 enum 키(KALITA_WAVE)로 저장돼 있어 사람이 읽는 이름으로 바꿔 채운다.
+  form.elements.dripper.value = DRIPPERS[r.dripper] ?? r.dripper ?? '';
 
   $('steps').innerHTML = '';
   r.steps.forEach(s => addStep(s.startTimeSeconds, s.pourAmount, s.note ?? ''));
@@ -440,11 +564,12 @@ $('recipe-form').addEventListener('submit', async e => {
   const number = key => Number(form.get(key));
 
   const body = {
-    title: text('title'), beanName: text('beanName'), roaster: text('roaster'),
-    origin: text('origin'), roastLevel: text('roastLevel'), grindSize: text('grindSize'),
+    title: text('title'), beanName: text('beanName'), purchaseUrl: text('purchaseUrl'),
+    origin: text('origin'), grindSize: text('grindSize'),
     grinder: text('grinder'),
     description: text('description'),
-    brewMethod: form.get('brewMethod'),
+    dripper: form.get('dripper'),
+    serveType: form.get('serveType'),
     coffeeAmount: number('coffeeAmount'), waterAmount: number('waterAmount'), waterTemp: number('waterTemp'),
     steps: [...$('steps').children].map(row => ({
       startTimeSeconds: Number(row.querySelector('[name=startTimeSeconds]').value),
