@@ -15,17 +15,16 @@ public interface RecipeRepository extends JpaRepository<Recipe, Long> {
      */
     @Query("""
             select r from Recipe r
-            where (:brewMethod is null or r.brewMethod = :brewMethod)
+            where (:dripper is null or r.dripper = :dripper)
               and (:authorId is null or r.authorId = :authorId)
               and (:savedBy is null or r.id in (select s.recipeId from RecipeSave s where s.userId = :savedBy))
               and (:q is null
                    or lower(r.title) like :q
                    or lower(r.beanName) like :q
-                   or lower(r.roaster) like :q
                    or lower(r.description) like :q)
             order by r.createdAt desc, r.id desc
             """)
-    List<Recipe> search(@Param("brewMethod") String brewMethod,
+    List<Recipe> search(@Param("dripper") String dripper,
                         @Param("authorId") Long authorId,
                         @Param("savedBy") Long savedBy,
                         @Param("q") String q);

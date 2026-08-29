@@ -19,7 +19,7 @@ class RecipeRepositoryTest {
 
     private Recipe save(Long authorId, String title, String method) {
         return recipeRepository.saveAndFlush(Recipe.builder()
-                .authorId(authorId).title(title).brewMethod(method)
+                .authorId(authorId).title(title).dripper(method)
                 .coffeeAmount(20).waterAmount(320).waterTemp(93)
                 .build());
     }
@@ -40,7 +40,7 @@ class RecipeRepositoryTest {
         save(1L, "케멕스 레시피", "CHEMEX");
 
         assertThat(recipeRepository.search("CHEMEX", null, null, null))
-                .extracting(Recipe::getBrewMethod)
+                .extracting(Recipe::getDripper)
                 .containsOnly("CHEMEX");
     }
 
@@ -67,7 +67,7 @@ class RecipeRepositoryTest {
     @Test
     void 검색어는_제목도_태그도_같이_훑는다() {
         Recipe tagged = recipeRepository.saveAndFlush(Recipe.builder()
-                .authorId(1L).title("아침 커피").beanName("예가체프").brewMethod("V60")
+                .authorId(1L).title("아침 커피").beanName("예가체프").dripper("V60")
                 .coffeeAmount(20).waterAmount(320).waterTemp(93)
                 .description("고소하고 달다 #플로럴 #데일리").build());
         save(1L, "저녁 커피", "V60");

@@ -5,6 +5,7 @@ import com.drippedia.domain.pourstep.PourStep;
 import com.drippedia.domain.pourstep.PourStepRepository;
 import com.drippedia.domain.recipe.Recipe;
 import com.drippedia.domain.recipe.RecipeRepository;
+import com.drippedia.domain.recipe.RecipeCommentRepository;
 import com.drippedia.domain.recipe.RecipeLike;
 import com.drippedia.domain.recipe.RecipeLikeRepository;
 import com.drippedia.domain.recipe.RecipeSave;
@@ -41,6 +42,7 @@ public class RecipeController {
     private final PourStepRepository pourStepRepository;
     private final RecipeSaveRepository recipeSaveRepository;
     private final RecipeLikeRepository recipeLikeRepository;
+    private final RecipeCommentRepository recipeCommentRepository;
     private final UserRepository userRepository;
 
     /** 사용자를 못 찾았을 때 목록/상세가 통째로 깨지는 것보단 이렇게 표시하는 게 낫다. */
@@ -55,30 +57,30 @@ public class RecipeController {
      */
     private static final java.util.regex.Pattern TAG = java.util.regex.Pattern.compile("(?<!\\S)#[^\\s#]+");
 
-    /** 메인 화면 목록(최신순). brewMethod를 주면 그 도구만 거른다. 로그인 없이도 볼 수 있다. */
+    /** 메인 화면 목록(최신순). dripper를 주면 그 도구만 거른다. 로그인 없이도 볼 수 있다. */
     @GetMapping
-    public List<Summary> list(@RequestParam(required = false) String brewMethod,
+    public List<Summary> list(@RequestParam(required = false) String dripper,
                               @RequestParam(required = false) String q,
                               @RequestParam(required = false) String sort) {
-        return sorted(summaries(recipeRepository.search(brewMethod, null, null, like(q))), sort);
+        return sorted(summaries(recipeRepository.search(dripper, null, null, like(q))), sort);
     }
 
     /** 내가 등록한 것만. 이 경로만 SecurityConfig에서 authenticated로 잡아 뒀다(아니면 userId가 null). */
     @GetMapping("/mine")
     public List<Summary> mine(@CurrentUserId Long userId,
-                              @RequestParam(required = false) String brewMethod,
+                              @RequestParam(required = false) String dripper,
                               @RequestParam(required = false) String q,
                               @RequestParam(required = false) String sort) {
-        return sorted(summaries(recipeRepository.search(brewMethod, userId, null, like(q))), sort);
+        return sorted(summaries(recipeRepository.search(dripper, userId, null, like(q))), sort);
     }
 
     /** 내가 저장(북마크)한 것만. /mine과 같은 이유로 authenticated. */
     @GetMapping("/saved")
     public List<Summary> saved(@CurrentUserId Long userId,
-                               @RequestParam(required = false) String brewMethod,
+                               @RequestParam(required = false) String dripper,
                                @RequestParam(required = false) String q,
                                @RequestParam(required = false) String sort) {
-        return sorted(summaries(recipeRepository.search(brewMethod, null, userId, like(q))), sort);
+        return sorted(summaries(recipeRepository.search(dripper, null, userId, like(q))), sort);
     }
 
     /**
@@ -125,10 +127,10 @@ public class RecipeController {
                 .authorId(userId)
                 .title(request.title())
                 .beanName(request.beanName())
-                .roaster(request.roaster())
+                .purchaseUrl(request.purchaseUrl())
                 .origin(request.origin())
-                .roastLevel(request.roastLevel())
-                .brewMethod(request.brewMethod())
+                .dripper(request.dripper())
+                .serveType(request.serveType())
                 .coffeeAmount(request.coffeeAmount())
                 .waterAmount(request.waterAmount())
                 .waterTemp(request.waterTemp())
@@ -147,8 +149,8 @@ public class RecipeController {
     @Transactional
     public Summary update(@CurrentUserId Long userId, @PathVariable Long id, @Valid @RequestBody Form request) {
         Recipe recipe = mustOwn(id, userId);
-        recipe.update(request.title(), request.beanName(), request.roaster(), request.origin(),
-                request.roastLevel(), request.brewMethod(), request.coffeeAmount(), request.waterAmount(),
+        recipe.update(request.title(), request.beanName(), request.purchaseUrl(), request.origin(),
+                request.dripper(), request.serveType(), request.coffeeAmount(), request.waterAmount(),
                 request.waterTemp(), request.grindSize(), request.grinder(), request.description());
 
         pourStepRepository.deleteByRecipeId(id);
@@ -165,6 +167,7 @@ public class RecipeController {
         pourStepRepository.deleteByRecipeId(id);
         recipeSaveRepository.deleteByRecipeId(id);
         recipeLikeRepository.deleteByRecipeId(id);
+        recipeCommentRepository.deleteByRecipeId(id);
         recipeRepository.deleteById(id);
 
         return ResponseEntity.noContent().build();
@@ -290,10 +293,11 @@ public class RecipeController {
     public record Form(
             @NotBlank @Size(max = 100) String title,
             @NotBlank @Size(max = 100) String beanName,
-            @Size(max = 100) String roaster,
-            @Size(max = 100) String origin,
-            @Size(max = 50) String roastLevel,
-            @NotBlank @Size(max = 50) String brewMethod,
+            @Size(max = 500) @Pattern(regexp = "https?://.+", message = "http로 시작하는 주소만 넣을 수 있습니다.")
+            String purchaseUrl,
+            @NotBlank @Size(max = 100) String origin,
+            @NotBlank @Size(max = 50) String dripper,
+            @NotBlank @Pattern(regexp = "HOT|ICE", message = "핫 또는 아이스만 고를 수 있습니다.") String serveType,
             @NotNull @Positive @Max(500) Integer coffeeAmount,
             @NotNull @Positive @Max(5000) Integer waterAmount,
             @NotNull @Min(1) @Max(100) Integer waterTemp,
@@ -316,16 +320,16 @@ public class RecipeController {
         }
     }
 
-    /** 상세 화면용. 목록 카드에 없는 원산지/로스팅 정도/분쇄도와 푸어 단계까지 다 내려준다. */
-    public record Detail(Long id, String title, String beanName, String roaster, String origin,
-                         String roastLevel, String brewMethod, int coffeeAmount, int waterAmount,
+    /** 상세 화면용. 목록 카드에 없는 원산지·분쇄도와 푸어 단계까지 다 내려준다. */
+    public record Detail(Long id, String title, String beanName, String purchaseUrl, String origin,
+                         String dripper, String serveType, int coffeeAmount, int waterAmount,
                          int waterTemp, double ratio, String grindSize, String grinder, String description, String author,
                          LocalDateTime createdAt, List<StepView> steps,
                          boolean saved, long saves, boolean liked, long likes, boolean mine) {
         static Detail from(Recipe r, String author, List<StepView> steps,
                            boolean saved, long saves, boolean liked, long likes, boolean mine) {
-            return new Detail(r.getId(), r.getTitle(), r.getBeanName(), r.getRoaster(), r.getOrigin(),
-                    r.getRoastLevel(), r.getBrewMethod(), r.getCoffeeAmount(), r.getWaterAmount(),
+            return new Detail(r.getId(), r.getTitle(), r.getBeanName(), r.getPurchaseUrl(), r.getOrigin(),
+                    r.getDripper(), r.getServeType(), r.getCoffeeAmount(), r.getWaterAmount(),
                     r.getWaterTemp(), r.ratio(), r.getGrindSize(), r.getGrinder(), r.getDescription(), author,
                     r.getCreatedAt(), steps, saved, saves, liked, likes, mine);
         }
@@ -344,12 +348,12 @@ public class RecipeController {
     }
 
     /** 목록 카드에 필요한 만큼만. 상세(PourStep 포함)는 상세 API에서. */
-    public record Summary(Long id, String title, String beanName, String roaster, String brewMethod,
+    public record Summary(Long id, String title, String beanName, String dripper, String serveType,
                           int coffeeAmount, int waterAmount, int waterTemp, double ratio,
                           String author, LocalDateTime createdAt, List<String> tags, long likes, long saves) {
         static Summary from(Recipe r, String author, long likes, long saves) {
-            return new Summary(r.getId(), r.getTitle(), r.getBeanName(), r.getRoaster(),
-                    r.getBrewMethod(), r.getCoffeeAmount(), r.getWaterAmount(),
+            return new Summary(r.getId(), r.getTitle(), r.getBeanName(),
+                    r.getDripper(), r.getServeType(), r.getCoffeeAmount(), r.getWaterAmount(),
                     r.getWaterTemp(), r.ratio(), author, r.getCreatedAt(), tagsOf(r.getDescription()),
                     likes, saves);
         }
