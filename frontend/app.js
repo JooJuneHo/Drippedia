@@ -3,7 +3,7 @@
 
 // 백엔드는 별도 오리진이라 API 주소를 명시해야 하고, 세션 쿠키를 실으려면 credentials가 필요하다.
 // ponytail: 환경 판별이 host 문자열 비교 한 줄. 배포 환경이 셋 이상 되면 빌드 타임 주입으로.
-const API = location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://api.drippedia.com';
+const API = location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://drippedia.onrender.com';
 
 /** 로그인 상태 확인. 200이면 사용자 정보, 401이면 null. 화면마다 null일 때 할 일이 다르다. */
 const fetchMe = () => fetch(`${API}/api/me`, { credentials: 'include' })
