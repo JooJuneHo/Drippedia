@@ -10,8 +10,21 @@ const fetchMe = () => fetch(`${API}/api/me`, { credentials: 'include' })
   .then(res => res.ok ? res.json() : null)
   .catch(() => null);
 
-/** POST는 CSRF 토큰을 헤더로 되돌려줘야 통과한다. 토큰은 백엔드가 내려준 쿠키에 들어 있다. */
+/**
+ * CSRF 토큰. 쓰기 요청은 이 값을 헤더로 되돌려줘야 통과한다.
+ * 배포에서는 프론트(vercel.app)와 백엔드(onrender.com)가 다른 도메인이라 JS가 XSRF-TOKEN 쿠키를
+ * 못 읽는다(쿠키는 도메인별로 격리된다). 그래서 값만 따로 받아 둔다 - 쿠키 자체는 브라우저가 실어 보낸다.
+ * 로컬은 둘 다 localhost라 쿠키가 그대로 읽히고, 그땐 이 요청이 실패해도 아래 쿠키 폴백이 받아 준다.
+ */
+let csrfToken = null;
+
+const loadCsrf = () => fetch(`${API}/api/csrf`, { credentials: 'include' })
+  .then(res => res.ok ? res.json() : null)
+  .then(body => csrfToken = body?.token ?? null)
+  .catch(() => null);
+
 const csrfHeader = () => {
-  const token = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
-  return token ? { 'X-XSRF-TOKEN': decodeURIComponent(token[1]) } : {};
+  const cookie = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+  const token = csrfToken ?? (cookie && decodeURIComponent(cookie[1]));
+  return token ? { 'X-XSRF-TOKEN': token } : {};
 };

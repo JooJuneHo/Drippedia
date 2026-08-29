@@ -47,7 +47,7 @@ public class SecurityConfig {
                         // 레시피 구경은 로그인 없이도 가능, 쓰는 건 로그인 필요
                         // 내 레시피만 예외. permitAll이면 익명 요청이 그대로 들어와 userId가 비어버린다
                         .requestMatchers(HttpMethod.GET, "/api/recipes/mine", "/api/recipes/saved").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/recipes/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/recipes/**", "/api/csrf").permitAll()
                         .requestMatchers("/error", "/login/**", "/oauth2/**").permitAll()
                         .anyRequest().authenticated()
                 )
