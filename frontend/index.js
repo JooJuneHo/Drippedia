@@ -32,21 +32,66 @@ const TABS = {
   me: { title: '마이', view: 'view-me' }
 };
 
+// 로그인해야 들어갈 수 있는 탭과 그때 띄울 문구.
+const GATED = {
+  new: '레시피를 등록하려면 로그인이 필요해요.',
+  mine: '저장한 레시피를 보려면 로그인이 필요해요.',
+  manage: '내 레시피를 관리하려면 로그인이 필요해요.'
+};
+
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 
-// 로그인 안 돼 있으면 로그인 화면으로 넘긴다. CSRF 토큰도 같이 받아 둔다(쓰기 요청에 필요).
-Promise.all([fetchMe(), loadCsrf()]).then(([me]) => {
-  if (!me) {
-    location.replace('login.html');
-    return;
-  }
-  $('nickname').textContent = me.nickname;
-  $('provider').textContent = me.provider === 'KAKAO' ? '카카오 로그인' : '구글 로그인';
-  $('profile-form').nickname.value = me.nickname;
+// 로그인한 사용자. 안 했으면 null - 구경은 그대로 되고, 쓰는 순간에만 로그인을 물어본다.
+let me = null;
+
+// 로그인 여부와 상관없이 홈부터 보여준다. CSRF 토큰도 같이 받아 둔다(쓰기 요청에 필요).
+Promise.all([fetchMe(), loadCsrf()]).then(([user]) => {
+  me = user;
+  renderMe();
   $('app').style.visibility = 'visible';
   route();
 });
+
+/** 마이 화면은 로그인 상태에 따라 내용이 통째로 갈린다. */
+function renderMe() {
+  $('me-in').classList.toggle('hidden', !me);
+  $('me-out').classList.toggle('hidden', Boolean(me));
+  if (me) {
+    $('nickname').textContent = me.nickname;
+    $('provider').textContent = me.provider === 'KAKAO' ? '카카오 로그인' : '구글 로그인';
+    $('profile-form').nickname.value = me.nickname;
+  }
+}
+
+/**
+ * 소셜 로그인은 fetch가 아니라 브라우저를 백엔드로 통째로 넘겨야 한다(카카오로 리다이렉트되므로).
+ * 로그인 후 보던 화면으로 돌아오게 지금 해시를 같이 넘긴다.
+ * 해시만 넘기므로 바깥 주소로 튈 일이 없다. 스프링 백엔드는 이 값을 무시하고 홈으로 보낸다.
+ */
+const loginUrl = provider =>
+  `${API}/oauth2/authorization/${provider}?next=${encodeURIComponent(location.hash || '#home')}`;
+
+document.querySelectorAll('[data-login]').forEach(button =>
+  button.addEventListener('click', () => location.href = loginUrl(button.dataset.login)));
+
+$('login-cancel').addEventListener('click', () => $('login-ask').close());
+
+/** 로그인이 필요한 걸 눌렀을 때. 화면은 그대로 두고 물어보기만 한다. */
+function askLogin(message = '로그인이 필요한 기능이에요.') {
+  $('login-ask-msg').textContent = message;
+  $('login-ask').showModal();
+}
+
+/** 화면 자체를 못 여는 경우. 물어보고 홈으로 되돌린다. */
+function gate(message) {
+  if (me) {
+    return true;
+  }
+  askLogin(message);
+  location.replace('#home');
+  return false;
+}
 
 // 드리퍼·그라인더 모두 추천 목록을 주되 직접 입력도 받는다(datalist).
 $('drippers').innerHTML = Object.values(DRIPPERS).map(d => `<option value="${esc(d)}">`).join('');
@@ -73,12 +118,21 @@ function route() {
   }
 
   if (name === 'edit' && param) {
+    if (!gate('레시피를 수정하려면 로그인이 필요해요.')) {
+      return;
+    }
     show('view-new', '레시피 수정', null);
     loadForEdit(param);
     return;
   }
 
   const tab = TABS[name] ? name : 'home';
+
+  // 로그인해야 내용이 나오는 화면들. 마이(#me)는 로그인 선택 화면을 대신 보여주므로 뺀다.
+  if (GATED[tab] && !gate(GATED[tab])) {
+    return;
+  }
+
   show(TABS[tab].view, TABS[tab].title, tab);
   if (TABS[tab].view === 'view-list') {
     listHash = `#${tab}`; // 상세에서 '목록으로'가 돌아올 곳
@@ -106,8 +160,9 @@ function show(view, title, tab) {
   document.querySelectorAll('#app section').forEach(s => s.classList.add('hidden'));
   $(view).classList.remove('hidden');
 
-  // 왼쪽 메뉴는 마이 계열(계정 관리 / 내 레시피 관리)에서만 붙는다
-  $('side').classList.toggle('hidden', tab !== 'me' && tab !== 'manage');
+  // 왼쪽 메뉴는 마이 계열(계정 관리 / 내 레시피 관리)에서만 붙는다.
+  // 로그인 전에는 마이가 로그인 선택 화면이라 메뉴를 붙일 게 없다.
+  $('side').classList.toggle('hidden', !me || (tab !== 'me' && tab !== 'manage'));
   document.querySelectorAll('#side a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === `#${tab}`));
 
   // 하단 탭바: 관리 화면은 마이의 하위 화면이라 마이를 켜 둔다
@@ -512,18 +567,27 @@ async function toggle(id, kind, on) {
 }
 
 /**
- * 쓰기 요청 한 군데. 401이면 로그인으로 보내고, 나머지 실패는 알려 준다.
- * 버튼을 눌렀는데 아무 일도 안 일어나는 게 제일 나쁘다(서버가 옛 버전이면 이렇게 보인다).
+ * 쓰기 요청 한 군데. 좋아요·저장·댓글·삭제가 전부 여기를 지나므로
+ * 로그인 확인도 여기 한 번만 둔다(부르는 쪽마다 두면 하나씩 빠뜨린다).
+ * 나머지 실패는 알려 준다 - 버튼을 눌렀는데 아무 일도 안 일어나는 게 제일 나쁘다.
  */
 async function send(url, options) {
+  if (!me) {
+    askLogin(); // 서버까지 갔다 올 것 없이 바로 물어본다
+    return null;
+  }
+
   const res = await fetch(url, {
     credentials: 'include',
     ...options,
     headers: { ...csrfHeader(), ...(options.headers ?? {}) }
   });
 
+  // 보는 동안 세션이 끊긴 경우(만료·탈퇴·다른 탭에서 로그아웃).
   if (res.status === 401) {
-    location.replace('login.html');
+    me = null;
+    renderMe();
+    askLogin('로그인이 풀렸어요. 다시 로그인해 주세요.');
     return null;
   }
   if (!res.ok) {
@@ -605,6 +669,11 @@ function resetForm() {
 
 $('recipe-form').addEventListener('submit', async e => {
   e.preventDefault();
+  if (!me) {
+    askLogin(editingId ? '레시피를 수정하려면 로그인이 필요해요.' : '레시피를 등록하려면 로그인이 필요해요.');
+    return;
+  }
+
   const form = new FormData(e.target);
   const text = key => (form.get(key) || '').trim() || null;
   const number = key => Number(form.get(key));
@@ -632,7 +701,9 @@ $('recipe-form').addEventListener('submit', async e => {
   });
 
   if (res.status === 401) {
-    location.replace('login.html');
+    me = null;
+    renderMe();
+    askLogin('로그인이 풀렸어요. 다시 로그인해 주세요.'); // 쓰던 내용은 폼에 그대로 남는다
     return;
   }
   if (!res.ok) {
@@ -668,7 +739,9 @@ $('profile-form').addEventListener('submit', async e => {
   });
 
   if (res.status === 401) {
-    location.replace('login.html');
+    me = null;
+    renderMe();
+    askLogin('로그인이 풀렸어요. 다시 로그인해 주세요.');
     return;
   }
   if (!res.ok) {
@@ -688,10 +761,17 @@ $('withdraw').addEventListener('click', async () => {
   }
 
   await fetch(`${API}/api/me`, { method: 'DELETE', credentials: 'include', headers: csrfHeader() });
-  location.replace('login.html');
+  leave();
 });
 
 $('logout').addEventListener('click', async () => {
   await fetch(`${API}/logout`, { method: 'POST', credentials: 'include', headers: csrfHeader() });
-  location.replace('login.html');
+  leave();
 });
+
+/** 로그아웃·탈퇴 뒤. 로그인 화면으로 쫓아내지 않고 구경할 수 있는 홈으로 돌려보낸다. */
+function leave() {
+  me = null;
+  renderMe();
+  location.replace('#home'); // 마이 화면에서만 부르므로 해시가 반드시 바뀐다(= route가 다시 돈다)
+}
