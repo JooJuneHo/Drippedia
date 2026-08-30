@@ -1,0 +1,21 @@
+{
+  "name": "drippedia-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/sync-frontend.js",
+    "dev": "next dev",
+    "prebuild": "node scripts/sync-frontend.js",
+    "build": "next build",
+    "start": "next start",
+    "check": "node --env-file=.env scripts/check-sql.js"
+  },
+  "dependencies": {
+    "next": "^15.1.0",
+    "next-auth": "^5.0.0-beta.25",
+    "postgres": "^3.4.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.1"
+  }
+}
