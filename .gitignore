@@ -34,7 +34,7 @@ out/
 
 ### 시크릿 (OAuth 키, DB 비밀번호 등) ###
 .env
-.env.*
+.env*
 !.env.example
 application-local.yml
 application-secret*.yml
@@ -43,3 +43,8 @@ application-secret*.yml
 *.keystore
 *.pem
 *.key
+
+### Next.js (web/) ###
+node_modules/
+.next/
+web/public/
